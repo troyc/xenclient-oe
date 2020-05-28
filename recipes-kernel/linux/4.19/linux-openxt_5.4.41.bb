@@ -16,9 +16,7 @@ SRC_URI += "${KERNELORG_MIRROR}/linux/kernel/v${PV_MAJOR}.x/linux-${PV}.tar.xz;n
     file://dont-suspend-xen-serial-port.patch \
     file://extra-mt-input-devices.patch \
     file://tpm-log-didvid.patch \
-    file://blktap2.patch \
     file://export-for-xenfb2.patch \
-    file://allow-service-vms.patch \
     file://intel-amt-support.patch \
     file://disable-csum-xennet.patch \
     file://pci-pt-move-unaligned-resources.patch \
@@ -48,5 +46,5 @@ SRC_URI += "${KERNELORG_MIRROR}/linux/kernel/v${PV_MAJOR}.x/linux-${PV}.tar.xz;n
     "
 
 LIC_FILES_CHKSUM = "file://COPYING;md5=bbea815ee2795b2f4230826c0c6b8814"
-SRC_URI[kernel.md5sum] = "bf96b6783a2d11178a2aaa3cf376f975"
-SRC_URI[kernel.sha256sum] = "293ec1ae0f6b3b4be83a217224b51d137f2163cf2d9d294eecf5d0a354e4e29d"
+SRC_URI[kernel.md5sum] = "e9d0e066f18a227c6bb0647429ca50a9"
+SRC_URI[kernel.sha256sum] = "1e64e7c247d7440b0dd9fa63135cf7078c3e09b933ae66dfb3e07b05dcf8b057"

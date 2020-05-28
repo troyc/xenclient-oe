@@ -40,7 +40,7 @@ PATCHES
 ################################################################################
 --- a/drivers/block/Kconfig
 +++ b/drivers/block/Kconfig
-@@ -481,4 +481,13 @@ config BLK_DEV_RSXX
+@@ -468,4 +468,13 @@ config BLK_DEV_RSXX
  	  To compile this driver as a module, choose M here: the
  	  module will be called rsxx.
  
@@ -56,7 +56,7 @@ PATCHES
  endif # BLK_DEV
 --- a/drivers/block/Makefile
 +++ b/drivers/block/Makefile
-@@ -26,6 +26,7 @@ obj-$(CONFIG_BLK_DEV_UMEM)	+= umem.o
+@@ -25,6 +25,7 @@ obj-$(CONFIG_BLK_DEV_UMEM)	+= umem.o
  obj-$(CONFIG_BLK_DEV_NBD)	+= nbd.o
  obj-$(CONFIG_BLK_DEV_CRYPTOLOOP) += cryptoloop.o
  obj-$(CONFIG_VIRTIO_BLK)	+= virtio_blk.o
@@ -611,7 +611,7 @@ PATCHES
 +MODULE_LICENSE("Dual BSD/GPL");
 --- /dev/null
 +++ b/drivers/block/blktap/device.c
-@@ -0,0 +1,684 @@
+@@ -0,0 +1,683 @@
 +#include <linux/fs.h>
 +#include <linux/blkdev.h>
 +#include <linux/cdrom.h>
@@ -690,8 +690,7 @@ PATCHES
 +		return 0;
 +
 +	case SCSI_IOCTL_GET_IDLUN:
-+		if (!access_ok(VERIFY_WRITE, argument,
-+			sizeof(struct scsi_idlun)))
++		if (!access_ok(argument, sizeof(struct scsi_idlun)))
 +			return -EFAULT;
 +
 +		/* return 0 for now. */
@@ -1831,7 +1830,7 @@ PATCHES
 +	 ((_req) * BLKTAP_SEGMENT_MAX * BLKTAP_PAGE_SIZE) +	\
 +	 ((_seg) * BLKTAP_PAGE_SIZE))
 +
-+static int blktap_ring_fault(struct vm_fault *vmf)
++static unsigned int blktap_ring_fault(struct vm_fault *vmf)
 +{
 +	return VM_FAULT_SIGBUS;
 +}
@@ -3017,41 +3016,27 @@ PATCHES
 +};
 +
 +#endif /* _LINUX_BLKTAP_H */
---- a/block/blk.h
-+++ b/block/blk.h
-@@ -239,11 +239,9 @@ static inline void elv_deactivate_rq(str
- 		e->type->ops.sq.elevator_deactivate_req_fn(q, rq);
- }
- 
--int elevator_init(struct request_queue *);
- int elevator_init_mq(struct request_queue *q);
- int elevator_switch_mq(struct request_queue *q,
- 			      struct elevator_type *new_e);
--void elevator_exit(struct request_queue *, struct elevator_queue *);
- int elv_register_queue(struct request_queue *q);
- void elv_unregister_queue(struct request_queue *q);
- 
 --- a/block/elevator.c
 +++ b/block/elevator.c
-@@ -239,6 +239,7 @@ out_unlock:
- 	mutex_unlock(&q->sysfs_lock);
- 	return err;
+@@ -247,6 +247,7 @@ struct request *elv_rqhash_find(struct r
+ 
+ 	return NULL;
  }
 +EXPORT_SYMBOL(elevator_init);
  
- void elevator_exit(struct request_queue *q, struct elevator_queue *e)
- {
-@@ -251,6 +252,7 @@ void elevator_exit(struct request_queue
+ /*
+  * RB-tree support functions for inserting/lookup/removal of requests
+@@ -345,6 +346,7 @@ enum elv_merge elv_merge(struct request_
  
- 	kobject_put(&e->kobj);
+ 	return ELEVATOR_NO_MERGE;
  }
 +EXPORT_SYMBOL(elevator_exit);
  
- static inline void __elv_rqhash_del(struct request *rq)
- {
+ /*
+  * Attempt to do an insertion back merge. Only check for the case where
 --- a/include/linux/elevator.h
 +++ b/include/linux/elevator.h
-@@ -219,6 +219,8 @@ extern void elv_unregister(struct elevat
+@@ -133,6 +133,8 @@ extern void elv_unregister(struct elevat
  extern ssize_t elv_iosched_show(struct request_queue *, char *);
  extern ssize_t elv_iosched_store(struct request_queue *, const char *, size_t);
  
@@ -3060,3 +3045,16 @@ PATCHES
  extern bool elv_bio_merge_ok(struct request *, struct bio *);
  extern struct elevator_queue *elevator_alloc(struct request_queue *,
  					struct elevator_type *);
+--- a/block/blk.h
++++ b/block/blk.h
+@@ -203,8 +203,8 @@ void __elevator_exit(struct request_queu
+ int elv_register_queue(struct request_queue *q, bool uevent);
+ void elv_unregister_queue(struct request_queue *q);
+ 
+-static inline void elevator_exit(struct request_queue *q,
+-		struct elevator_queue *e)
++void elevator_exit(struct request_queue *q,
++		   struct elevator_queue *e)
+ {
+ 	lockdep_assert_held(&q->sysfs_lock);
+ 
