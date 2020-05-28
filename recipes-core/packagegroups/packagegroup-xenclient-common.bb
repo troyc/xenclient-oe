@@ -26,4 +26,6 @@ RDEPENDS_${PN} = " \
     vim-tiny \
     sysvinit-pidof \
     nano \
+    blktrace \
+    kexec-tools \
 "
