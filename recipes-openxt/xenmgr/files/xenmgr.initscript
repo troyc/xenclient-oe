@@ -27,7 +27,7 @@ test -x /usr/bin/xenmgr || exit 0
 
 export XENVM_DEBUG=syslog:xenvm
 
-XENMGR_OPTS="--no-daemonize"
+XENMGR_OPTS="--no-autostart --no-daemonize"
 if [ -n "$2" ]; then
     XENMGR_OPTS="$XENMGR_OPTS $2"
 fi
