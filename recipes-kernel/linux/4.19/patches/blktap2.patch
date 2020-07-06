@@ -617,7 +617,7 @@ PATCHES
 +MODULE_LICENSE("Dual BSD/GPL");
 --- /dev/null
 +++ b/drivers/block/blktap/device.c
-@@ -0,0 +1,803 @@
+@@ -0,0 +1,818 @@
 +#include <linux/fs.h>
 +#include <linux/blkdev.h>
 +#include <linux/cdrom.h>
@@ -781,7 +781,8 @@ PATCHES
 +
 +	blktap_ring_free_request(tap, request);
 +
-+	dev_dbg(disk_to_dev(tapdev->gd),
++	//dev_dbg(disk_to_dev(tapdev->gd),
++	printk_ratelimited(KERN_ALERT
 +		"end_request: op=%d error=%d bytes=%d\n",
 +		rq_data_dir(rq), error, blk_rq_bytes(rq));
 +
@@ -985,11 +986,24 @@ PATCHES
 +
 +	blk_mq_end_request(req, BLK_STS_OK);
 +
-+	blktap_ring_kick_user(tapdev->tap);
++	if (bd->last) {
++		printk_ratelimited(KERN_ALERT "AXA kicking user... \n");
++		blktap_ring_kick_user(tapdev->tap);
++	}
++	else
++		printk_ratelimited(KERN_ALERT "AXA not kicking user... \n");
 +
 +	spin_unlock_irq(&tapdev->lock);
 +	//msleep(20);
 +	return BLK_STS_OK;
++}
++
++static void
++blktap_commit_rqs(struct blk_mq_hw_ctx *hctx)
++{
++	struct blktap_device *tapdev = hctx->queue->queuedata;
++	printk_ratelimited(KERN_ALERT "AXA kicking user from blktap_commit_rqs... \n");
++	blktap_ring_kick_user(tapdev->tap);
 +}
 +
 +static void
@@ -1255,7 +1269,8 @@ PATCHES
 +}
 +
 +static const struct blk_mq_ops blktap_mq_ops = {
-+	.queue_rq = blktap_queue_rq
++	.queue_rq	= blktap_queue_rq,
++	.commit_rqs	= blktap_commit_rqs,
 +};
 +
 +int
@@ -1851,7 +1866,7 @@ PATCHES
 +}
 --- /dev/null
 +++ b/drivers/block/blktap/ring.c
-@@ -0,0 +1,854 @@
+@@ -0,0 +1,858 @@
 +
 +#include <linux/device.h>
 +#include <linux/signal.h>
@@ -1952,7 +1967,7 @@ PATCHES
 +	for (rc = ring->ring.rsp_cons; rc != rp; rc++) {
 +		memcpy(&rsp, RING_GET_RESPONSE(&ring->ring, rc), sizeof(rsp));
 +		blktap_ring_read_response(tap, &rsp);
-+		printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: AXA read response... %s %d \n",__FUNCTION__,__LINE__);
 +	}
 +
 +	ring->ring.rsp_cons = rc;
@@ -2082,6 +2097,7 @@ PATCHES
 +
 +	ring->pending[request->usr_idx] = NULL;
 +	ring->n_pending--;
++	printk_ratelimited(KERN_ALERT "AXA Freed %d, now %d pending requests.\n", request->usr_idx, ring->n_pending);
 +
 +	blktap_request_free(tap, request);
 +}
@@ -2111,6 +2127,7 @@ PATCHES
 +
 +	ring->pending[usr_idx] = request;
 +	ring->n_pending++;
++	printk_ratelimited(KERN_ALERT "AXA Made %d, now %d pending requests.\n", request->usr_idx, ring->n_pending);
 +
 +	return request;
 +}
@@ -2163,7 +2180,8 @@ PATCHES
 +	struct blktap_ring_request *breq;
 +	int nsecs;
 +
-+	dev_dbg(ring->dev,
++	//dev_dbg(ring->dev,
++	printk_ratelimited(KERN_ALERT
 +		"request %d [%p] submit\n", request->usr_idx, request);
 +
 +	breq = RING_GET_REQUEST(&ring->ring, ring->ring.req_prod_pvt);
@@ -2509,15 +2527,16 @@ PATCHES
 +	up_read(&current->mm->mmap_sem);
 +*/
 +	spin_lock_irq(&tapdev->lock);
-+	//work = ring->ring.req_prod_pvt - ring->ring.sring->req_prod;
-+	work = 0;
++	work = ring->ring.req_prod_pvt - ring->ring.sring->req_prod;
++	//work = 0;
 +	RING_PUSH_REQUESTS(&ring->ring);
 +	printk_ratelimited(KERN_ALERT "DEBUG: AXA req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
 +
-+	int rdy = test_and_clear_bit(1, &tap->rdy);
++	//int rdy = test_and_clear_bit(1, &tap->rdy);
++	int rdy = 0;
 +
 +	if (rdy || work ||
-+	    //*BLKTAP_RING_MESSAGE(ring->ring.sring) ||
++	    *BLKTAP_RING_MESSAGE(ring->ring.sring) ||
 +	    test_and_clear_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse)) {
 +		printk_ratelimited(KERN_ALERT "POLLIN: AXA rdy: %i work: %i \n", rdy, work);
 +		spin_unlock_irq(&tapdev->lock);
