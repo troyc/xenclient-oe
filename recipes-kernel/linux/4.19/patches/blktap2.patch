@@ -617,7 +617,7 @@ PATCHES
 +MODULE_LICENSE("Dual BSD/GPL");
 --- /dev/null
 +++ b/drivers/block/blktap/device.c
-@@ -0,0 +1,839 @@
+@@ -0,0 +1,848 @@
 +#include <linux/fs.h>
 +#include <linux/blkdev.h>
 +#include <linux/cdrom.h>
@@ -657,7 +657,7 @@ PATCHES
 +	struct blktap_device *tapdev = disk->private_data;
 +	struct block_device *bdev = bdget_disk(disk, 0);
 +	struct blktap *tap = dev_to_blktap(tapdev);
-+	printk(KERN_ALERT "AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "AXA %s %d \n",__FUNCTION__,__LINE__);
 +
 +	bdput(bdev);
 +
@@ -709,7 +709,7 @@ PATCHES
 +		return 0;
 +
 +	default:
-+		/*printk(KERN_ALERT "ioctl %08x not supported by Xen blkdev\n",
++		/*printk_ratelimited(KERN_ALERT "ioctl %08x not supported by Xen blkdev\n",
 +		  command);*/
 +		return -EINVAL; /* same return as native Linux */
 +	}
@@ -730,14 +730,14 @@ PATCHES
 +static inline struct request*
 +__blktap_next_queued_rq(struct request_queue *q)
 +{
-+	printk(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
 +	return 0; //blk_peek_request(q);
 +}
 +
 +static inline void
 +__blktap_dequeue_rq(struct request *rq)
 +{
-+	printk(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
 +	//blk_start_request(rq);
 +}
 +
@@ -746,7 +746,7 @@ PATCHES
 +static inline void
 +__blktap_end_queued_rq(struct request *rq, int err)
 +{
-+	printk(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
 +	//rq->cmd_flags |= RQF_QUIET;
 +	//blk_start_request(rq);
 +	//__blk_end_request(rq, err, blk_rq_bytes(rq));
@@ -755,14 +755,14 @@ PATCHES
 +static inline void
 +__blktap_end_rq(struct request *rq, int err)
 +{
-+	printk(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
 +	//__blk_end_request(rq, err, blk_rq_bytes(rq));
 +}
 +
 +static inline void
 +blktap_end_rq(struct request *rq, int err)
 +{
-+	//printk(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
++	//printk_ratelimited(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
 +	//struct request_queue *q = rq->q;
 +
 +	//spin_lock_irq(q->queue_lock);
@@ -776,11 +776,11 @@ PATCHES
 +			  int error)
 +{
 +	if (tap == 0) {
-+		printk(KERN_ALERT "AXA! tap is NULL! \n");
++		printk_ratelimited(KERN_ALERT "AXA! tap is NULL! \n");
 +		return;
 +	}
 +	if (request == 0) {
-+		printk(KERN_ALERT "AXA! request is NULL! \n");
++		printk_ratelimited(KERN_ALERT "AXA! request is NULL! \n");
 +		return;
 +	}
 +	struct blktap_device *tapdev = &tap->device;
@@ -792,15 +792,16 @@ PATCHES
 +
 +	//dev_dbg(disk_to_dev(tapdev->gd),
 +	/*
-+	printk(KERN_ALERT
++	printk_ratelimited(KERN_ALERT
 +		"end_request: op=%d error=%d bytes=%d\n",
 +		rq_data_dir(rq), error, blk_rq_bytes(rq));
 +	*/
 +	blktap_end_rq(rq, error);
 +
-+	printk(KERN_ALERT "AXA request refcount: %i\n", refcount_read(&rq->ref));
++	printk_ratelimited(KERN_ALERT "AXA request refcount: %i\n", refcount_read(&rq->ref));
 +	//test doing this here so it doesn't get free'd
-+	blk_mq_end_request(rq, BLK_STS_OK);
++	//blk_mq_end_request(rq, BLK_STS_OK);
++	blk_mq_complete_request(rq);
 +}
 +
 +int
@@ -811,7 +812,7 @@ PATCHES
 +	int nsegs;
 +	int err;
 +
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	request = blktap_ring_make_request(tap);
 +	if (IS_ERR(request)) {
 +		err = PTR_ERR(request);
@@ -830,21 +831,21 @@ PATCHES
 +
 +	switch (req_op(rq)) {
 +		case REQ_OP_DISCARD:
-+			printk(KERN_ALERT "DEBUG: REQ_OP_DISCARD AXA %s %d \n",__FUNCTION__,__LINE__);
++			printk_ratelimited(KERN_ALERT "DEBUG: REQ_OP_DISCARD AXA %s %d \n",__FUNCTION__,__LINE__);
 +			request->operation = BLKTAP_OP_TRIM;
 +			request->nr_pages  = 0;
 +			goto submit;
 +		case REQ_OP_FLUSH:
-+			printk(KERN_ALERT "DEBUG: REQ_OP_FLUSH AXA %s %d \n",__FUNCTION__,__LINE__);
++			printk_ratelimited(KERN_ALERT "DEBUG: REQ_OP_FLUSH AXA %s %d \n",__FUNCTION__,__LINE__);
 +			request->operation = BLKTAP_OP_FLUSH;
 +			request->nr_pages  = 0;
 +			goto submit;
 +		case REQ_OP_READ:
-+			printk(KERN_ALERT "DEBUG: REQ_OP_READ AXA %s %d \n",__FUNCTION__,__LINE__);
++			printk_ratelimited(KERN_ALERT "DEBUG: REQ_OP_READ AXA %s %d \n",__FUNCTION__,__LINE__);
 +			request->operation = BLKTAP_OP_READ;
 +			break;
 +		case REQ_OP_WRITE:
-+			printk(KERN_ALERT "DEBUG: REQ_OP_WRITE AXA %s %d \n",__FUNCTION__,__LINE__);
++			printk_ratelimited(KERN_ALERT "DEBUG: REQ_OP_WRITE AXA %s %d \n",__FUNCTION__,__LINE__);
 +			request->operation = BLKTAP_OP_WRITE;
 +			break;
 +		default:
@@ -864,7 +865,7 @@ PATCHES
 +
 +submit:
 +	request->rq = rq;
-+	printk(KERN_ALERT "DEBUG: SUBMIT AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: SUBMIT AXA %s %d \n",__FUNCTION__,__LINE__);
 +	blktap_ring_submit_request(tap, request);
 +
 +	return 0;
@@ -879,10 +880,10 @@ PATCHES
 +
 +	return err;
 +fail:
-+	printk(KERN_ALERT "DEBUG: FAIL AXA %s %d \n",__FUNCTION__,__LINE__);
-+	if (printk_ratelimit())
-+		dev_warn(disk_to_dev(tapdev->gd),
-+			 "make request: %d, failing\n", err);
++	printk_ratelimited(KERN_ALERT "DEBUG: FAIL AXA %s %d \n",__FUNCTION__,__LINE__);
++	//if (printk_ratelimit())
++	//	dev_warn(disk_to_dev(tapdev->gd),
++	//		 "make request: %d, failing\n", err);
 +	goto _out;
 +}
 +
@@ -906,7 +907,7 @@ PATCHES
 +	//spin_lock_irq(&tapdev->lock);
 +
 +	do {
-+		printk(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
 +		rq = __blktap_next_queued_rq(q);
 +		if (!rq)
 +			break;
@@ -956,16 +957,16 @@ PATCHES
 +{
 +	struct blktap_device *tapdev = hctx->queue->queuedata;
 +	if (tapdev == 0) {
-+		printk(KERN_ALERT "AXA NULL tapdev \n");
++		printk_ratelimited(KERN_ALERT "AXA NULL tapdev \n");
 +		return BLK_STS_RESOURCE;
 +	}
 +	if (tapdev->tap == 0) {
-+		printk(KERN_ALERT "AXA NULL tapdev->tap \n");
++		printk_ratelimited(KERN_ALERT "AXA NULL tapdev->tap \n");
 +		return BLK_STS_RESOURCE;
 +	}
 +/*
 +	if (tapdev->tap->ring.ring == 0) {
-+		printk(KERN_ALERT "AXA NULL tapdev->tap->ring.ring \n");
++		printk_ratelimited(KERN_ALERT "AXA NULL tapdev->tap->ring.ring \n");
 +		return BLK_STS_RESOURCE;
 +	}
 +*/
@@ -973,16 +974,16 @@ PATCHES
 +	struct blktap_ring *ring = &tapdev->tap->ring;
 +
 +	if (ring == 0) {
-+		printk(KERN_ALERT "AXA NULL ring \n");
++		printk_ratelimited(KERN_ALERT "AXA NULL ring \n");
 +		return BLK_STS_RESOURCE;
 +	}
 +	if (ring->vma == 0 || ring->vma->vm_mm == 0) {
-+		printk(KERN_ALERT "AXA NULL ring vma/vm_mm\n");
++		printk_ratelimited(KERN_ALERT "AXA NULL ring vma/vm_mm\n");
 +		return BLK_STS_RESOURCE;
 +	}
 +//AXA
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
-+	spin_lock_irq(&tapdev->lock);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	//spin_lock_irq(&tapdev->lock);
 +	blk_mq_start_request(req);
 +
 +	//down_read(&current->mm->mmap_sem);
@@ -990,31 +991,31 @@ PATCHES
 +	//TODO: semaphores
 +	if (ring->vma) {
 +		blktap_device_make_request(tapdev->tap, req);
-+		printk(KERN_ALERT "DEBUG: make_request AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: make_request AXA %s %d \n",__FUNCTION__,__LINE__);
 +	}
 +	//up_read(&current->mm->mmap_sem);
 +	up_read(&ring->vma->vm_mm->mmap_sem);
-+	//printk(KERN_ALERT "DEBUG: BEFORE AXA req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
++	//printk_ratelimited(KERN_ALERT "DEBUG: BEFORE AXA req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
 +	//RING_PUSH_REQUESTS(&ring->ring);
-+	//printk(KERN_ALERT "DEBUG: AFTER AXA req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
++	//printk_ratelimited(KERN_ALERT "DEBUG: AFTER AXA req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
 +
 +	//blk_mq_end_request(req, BLK_STS_OK);
 +
 +	if (bd->last) {
-+		printk(KERN_ALERT "AXA kicking user... \n");
 +		blktap_ring_kick_user(tapdev->tap);
 +	}
 +	else
-+		printk(KERN_ALERT "AXA not kicking user... \n");
++		printk_ratelimited(KERN_ALERT "AXA not kicking user... \n");
 +
-+	spin_unlock_irq(&tapdev->lock);
++	//spin_unlock_irq(&tapdev->lock);
 +	//msleep(20);
 +	return BLK_STS_OK;
 +}
 +
-+static inline void blktap_request_done(struct request *req)
++static inline void blktap_request_done(struct request *rq)
 +{
-+	//AXA test...
++	printk_ratelimited(KERN_ALERT "AXA completing request; refcount: %i\n", refcount_read(&rq->ref));
++	blk_mq_end_request(rq, BLK_STS_OK);
 +}
 +
 +
@@ -1022,7 +1023,7 @@ PATCHES
 +blktap_commit_rqs(struct blk_mq_hw_ctx *hctx)
 +{
 +	struct blktap_device *tapdev = hctx->queue->queuedata;
-+	printk(KERN_ALERT "AXA kicking user from blktap_commit_rqs... \n");
++	printk_ratelimited(KERN_ALERT "AXA kicking user from blktap_commit_rqs... \n");
 +	blktap_ring_kick_user(tapdev->tap);
 +}
 +
@@ -1203,11 +1204,13 @@ PATCHES
 +	struct block_device *bdev;
 +	struct gendisk *gd;
 +	int err;
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +
 +	gd = tapdev->gd;
-+	if (!gd)
++	if (!gd) {
++		printk_ratelimited(KERN_ALERT "AXA no gd! \n");
 +		return 0;
++	}
 +
 +	bdev = bdget_disk(gd, 0);
 +
@@ -1228,7 +1231,7 @@ PATCHES
 +	gd->private_data = NULL;
 +
 +	if (gd->queue) {
-+		printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +		blk_cleanup_queue(gd->queue);
 +		gd->queue = NULL;
 +	}
@@ -1251,7 +1254,7 @@ PATCHES
 +out_nolock:
 +	bdput(bdev);
 +
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	return err;
 +}
 +
@@ -1265,7 +1268,7 @@ PATCHES
 +	//spin_lock_irq(&tapdev->lock);
 +
 +	do {
-+		printk(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
 +		struct request *rq = __blktap_next_queued_rq(q);
 +		if (!rq)
 +			break;
@@ -1307,7 +1310,7 @@ PATCHES
 +	tapdev = &tap->device;
 +	minor  = tap->minor;
 +
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	tapdev->tap = tap;	//AXA it doesn't really go here.
 +
 +	tapdev->tag_set.ops = &blktap_mq_ops;
@@ -1318,14 +1321,20 @@ PATCHES
 +	tapdev->tag_set.nr_hw_queues = 1;
 +
 +	err = blk_mq_alloc_tag_set(&tapdev->tag_set);
-+	if (err)
++	if (err) {
++		printk_ratelimited(KERN_ALERT "AXA! -ENOMEM %s %d \n",__FUNCTION__,__LINE__);
 +		return -ENOMEM;//AXA better error handling?
++	}
 +
-+	if (test_bit(BLKTAP_DEVICE, &tap->dev_inuse))
++	if (test_bit(BLKTAP_DEVICE, &tap->dev_inuse)) {
++		printk_ratelimited(KERN_ALERT "AXA! -EEXIST %s %d \n",__FUNCTION__,__LINE__);
 +		return -EEXIST;
++	}
 +
-+	if (blktap_device_validate_info(tap, info))
++	if (blktap_device_validate_info(tap, info)) {
++		printk_ratelimited(KERN_ALERT "AXA! -EINVAL %s %d \n",__FUNCTION__,__LINE__);
 +		return -EINVAL;
++	}
 +
 +	gd = alloc_disk(1);
 +	if (!gd) {
@@ -1386,7 +1395,7 @@ PATCHES
 +		 queue_discard_alignment(rq),
 +		 rq->queue_flags);
 +
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	return 0;
 +
 +fail:
@@ -1395,7 +1404,7 @@ PATCHES
 +	if (rq)
 +		blk_cleanup_queue(rq);
 +	//AXA todo: cleanup tags if alloc'd
-+	printk(KERN_ALERT "DEBUG: FAIL AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: FAIL AXA %s %d \n",__FUNCTION__,__LINE__);
 +	return err;
 +}
 +
@@ -1603,7 +1612,7 @@ PATCHES
 +		return;
 +
 +	BUG_ON(seg >= request->nr_pages);
-+	
++
 +	s = sg_virt(sg);
 +	p = page_address(request->pages[seg]);
 +	if (!s || !p)
@@ -1887,7 +1896,7 @@ PATCHES
 +}
 --- /dev/null
 +++ b/drivers/block/blktap/ring.c
-@@ -0,0 +1,860 @@
+@@ -0,0 +1,873 @@
 +
 +#include <linux/device.h>
 +#include <linux/signal.h>
@@ -1944,7 +1953,7 @@ PATCHES
 +	}
 +
 +	//dev_dbg(ring->dev,
-+	printk(
++	printk_ratelimited(
 +		"AXAAA request %d [%p] response: %d\n",
 +		request->usr_idx, request, rsp->status);
 +
@@ -1955,7 +1964,7 @@ PATCHES
 +
 +invalid:
 +	//dev_warn(ring->dev,
-+	printk(
++	printk_ratelimited(
 +		 "AXAAA invalid response, idx:%d status:%d op:%d/%d: err %d\n",
 +		 usr_idx, rsp->status,
 +		 rsp->operation, request->operation,
@@ -1971,11 +1980,11 @@ PATCHES
 +	struct blktap_ring_response rsp;
 +	RING_IDX rc, rp;
 +	struct blktap_device *tapdev = &tap->device;
-+	spin_lock_irq(&tapdev->lock);
++	//spin_lock_irq(&tapdev->lock);
 +
-+	printk(KERN_ALERT "DEBUG: START AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: START AXA %s %d \n",__FUNCTION__,__LINE__);
 +	down_write(&current->mm->mmap_sem);
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	if (!ring->vma) {
 +		up_read(&current->mm->mmap_sem);
 +		return;
@@ -1988,14 +1997,14 @@ PATCHES
 +	for (rc = ring->ring.rsp_cons; rc != rp; rc++) {
 +		memcpy(&rsp, RING_GET_RESPONSE(&ring->ring, rc), sizeof(rsp));
 +		blktap_ring_read_response(tap, &rsp);
-+		printk(KERN_ALERT "DEBUG: AXA read response... %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: AXA read response... %s %d \n",__FUNCTION__,__LINE__);
 +	}
 +
 +	ring->ring.rsp_cons = rc;
 +
 +	up_write(&current->mm->mmap_sem);
-+	printk(KERN_ALERT "DEBUG: END AXA %s %d \n",__FUNCTION__,__LINE__);
-+	spin_unlock_irq(&tapdev->lock);
++	printk_ratelimited(KERN_ALERT "DEBUG: END AXA %s %d \n",__FUNCTION__,__LINE__);
++	//spin_unlock_irq(&tapdev->lock);
 +	//msleep(40);
 +}
 +
@@ -2012,10 +2021,12 @@ PATCHES
 +static void
 +blktap_ring_fail_pending(struct blktap *tap)
 +{
++	struct blktap_device *tapdev = &tap->device;
 +	struct blktap_ring *ring = &tap->ring;
 +	struct blktap_request *request;
 +	int usr_idx;
 +
++	//spin_lock_irq(&tapdev->lock);
 +	for (usr_idx = 0; usr_idx < BLKTAP_RING_SIZE; usr_idx++) {
 +		request = ring->pending[usr_idx];
 +		if (!request)
@@ -2024,6 +2035,7 @@ PATCHES
 +		request->rq->cmd_flags |= RQF_QUIET;
 +		blktap_device_end_request(tap, request, -EIO);
 +	}
++	//spin_unlock_irq(&tapdev->lock); //AXA
 +}
 +
 +static void
@@ -2031,7 +2043,7 @@ PATCHES
 +{
 +	struct blktap *tap = vma->vm_private_data;
 +	struct blktap_ring *ring = &tap->ring;
-+	printk(KERN_ALERT "AXA! %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "AXA! %s %d \n",__FUNCTION__,__LINE__);
 +	struct page *page = virt_to_page(ring->ring.sring);
 +
 +	blktap_ring_fail_pending(tap);
@@ -2071,7 +2083,7 @@ PATCHES
 +	int write;
 +
 +	write = request->operation == BLKTAP_OP_WRITE;
-+	printk(KERN_ALERT "AXA mapping %d pages...\n", request->nr_pages);
++	printk_ratelimited(KERN_ALERT "AXA mapping %d pages...\n", request->nr_pages);
 +
 +	for (seg = 0; seg < request->nr_pages; seg++) {
 +		if (write)
@@ -2083,7 +2095,7 @@ PATCHES
 +	}
 +
 +	if (err) {
-+		printk(KERN_ALERT "AXA ERR %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "AXA ERR %s %d \n",__FUNCTION__,__LINE__);
 +		blktap_ring_unmap_request(tap, request);
 +	}
 +
@@ -2118,7 +2130,7 @@ PATCHES
 +
 +	ring->pending[request->usr_idx] = NULL;
 +	ring->n_pending--;
-+	printk(KERN_ALERT "AXA Freed %d, now %d pending requests.\n", request->usr_idx, ring->n_pending);
++	printk_ratelimited(KERN_ALERT "AXA Freed %d, now %d pending requests.\n", request->usr_idx, ring->n_pending);
 +
 +	blktap_request_free(tap, request);
 +}
@@ -2148,7 +2160,7 @@ PATCHES
 +
 +	ring->pending[usr_idx] = request;
 +	ring->n_pending++;
-+	printk(KERN_ALERT "AXA Made %d, now %d pending requests.\n", request->usr_idx, ring->n_pending);
++	printk_ratelimited(KERN_ALERT "AXA Made %d, now %d pending requests.\n", request->usr_idx, ring->n_pending);
 +
 +	return request;
 +}
@@ -2202,7 +2214,7 @@ PATCHES
 +	int nsecs;
 +
 +	//dev_dbg(ring->dev,
-+	printk(KERN_ALERT
++	printk_ratelimited(KERN_ALERT
 +		"request %d [%p] submit\n", request->usr_idx, request);
 +
 +	breq = RING_GET_REQUEST(&ring->ring, ring->ring.req_prod_pvt);
@@ -2214,7 +2226,7 @@ PATCHES
 +
 +	switch (breq->operation) {
 +	case BLKTAP_OP_READ:
-+		printk(KERN_ALERT "READ AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "READ AXA %s %d \n",__FUNCTION__,__LINE__);
 +		nsecs = blktap_ring_make_rw_request(tap, request, breq);
 +
 +		tap->stats.st_rd_sect += nsecs;
@@ -2222,7 +2234,7 @@ PATCHES
 +		break;
 +
 +	case BLKTAP_OP_WRITE:
-+		printk(KERN_ALERT "WRITE AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "WRITE AXA %s %d \n",__FUNCTION__,__LINE__);
 +		nsecs = blktap_ring_make_rw_request(tap, request, breq);
 +
 +		tap->stats.st_wr_sect += nsecs;
@@ -2230,13 +2242,13 @@ PATCHES
 +		break;
 +
 +	case BLKTAP_OP_FLUSH:
-+		printk(KERN_ALERT "FLUSH AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "FLUSH AXA %s %d \n",__FUNCTION__,__LINE__);
 +		breq->u.rw.sector_number = 0;
 +		tap->stats.st_fl_req++;
 +		break;
 +
 +	case BLKTAP_OP_TRIM:
-+		printk(KERN_ALERT "TRIM AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "TRIM AXA %s %d \n",__FUNCTION__,__LINE__);
 +		nsecs = blktap_ring_make_tr_request(tap, request, breq);
 +
 +		tap->stats.st_tr_sect += nsecs;
@@ -2247,7 +2259,7 @@ PATCHES
 +	}
 +
 +	ring->ring.req_prod_pvt++;
-+	printk(KERN_ALERT "DEBUG: AXA prod_pvt = %i %s %d \n",ring->ring.req_prod_pvt,__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA prod_pvt = %i %s %d \n",ring->ring.req_prod_pvt,__FUNCTION__,__LINE__);
 +	set_bit(1, &tap->rdy);
 +	//tap->rdy = 1;
 +	//msleep(40);
@@ -2264,6 +2276,7 @@ PATCHES
 +	if (minor < blktap_max_minor)
 +		tap = blktaps[minor];
 +
++	printk_ratelimited(KERN_ALERT "AXA opened ring for blktap %i %s %d \n", minor, __FUNCTION__,__LINE__);
 +	if (!tap)
 +		return -ENXIO;
 +
@@ -2293,7 +2306,7 @@ PATCHES
 +static int
 +blktap_ring_release(struct inode *inode, struct file *filp)
 +{
-+	printk(KERN_ALERT "AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "AXA %s %d \n",__FUNCTION__,__LINE__);
 +	struct blktap *tap = filp->private_data;
 +
 +	tap->ring.task = NULL;
@@ -2375,7 +2388,7 @@ PATCHES
 +	void __user *ptr = (void *)arg;
 +	int err;
 +
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	BTDBG("%d: cmd: %u, arg: %lu\n", tap->minor, cmd, arg);
 +
 +	if (!ring->vma || ring->vma->vm_mm != current->mm)
@@ -2383,13 +2396,13 @@ PATCHES
 +
 +	switch(cmd) {
 +	case BLKTAP_IOCTL_RESPOND:
-+		printk(KERN_ALERT "DEBUG: BLKTAP_IOCTL_RESPOND AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BLKTAP_IOCTL_RESPOND AXA %s %d \n",__FUNCTION__,__LINE__);
 +
 +		blktap_read_ring(tap);
 +		return 0;
 +
 +	case BLKTAP_IOCTL_CREATE_DEVICE_COMPAT: {
-+		printk(KERN_ALERT "DEBUG: BLKTAP_IOCTL_CREATE_DEVICE_COMPAT AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BLKTAP_IOCTL_CREATE_DEVICE_COMPAT AXA %s %d \n",__FUNCTION__,__LINE__);
 +		struct blktap_device_info info;
 +		struct blktap2_params params;
 +
@@ -2413,11 +2426,12 @@ PATCHES
 +	}
 +
 +	case BLKTAP_IOCTL_CREATE_DEVICE: {
-+		printk(KERN_ALERT "DEBUG: BLKTAP_IOCTL_CREATE_DEVICE AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BLKTAP_IOCTL_CREATE_DEVICE AXA %s %d \n",__FUNCTION__,__LINE__);
 +		struct blktap_device_info __user *ptr = (void *)arg;
 +		struct blktap_device_info info;
 +		unsigned long mask;
 +		size_t base_sz, sz;
++		int err;	//AXA
 +
 +		mask  = BLKTAP_DEVICE_FLAG_RO;
 +		mask |= BLKTAP_DEVICE_FLAG_PSZ;
@@ -2443,16 +2457,18 @@ PATCHES
 +		if (put_user(info.flags & mask, &ptr->flags))
 +			return -EFAULT;
 +
-+		return blktap_device_create(tap, &info);
++		err = blktap_device_create(tap, &info);
++		printk_ratelimited(KERN_ALERT "err: %i", err);
++		return err;
 +	}
 +
 +	case BLKTAP_IOCTL_REMOVE_DEVICE:
-+		printk(KERN_ALERT "DEBUG: BLKTAP_IOCTL_REMOVE_DEVICE AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BLKTAP_IOCTL_REMOVE_DEVICE AXA %s %d \n",__FUNCTION__,__LINE__);
 +
 +		return blktap_device_destroy(tap);
 +
 +	case BLKTAP2_IOCTL_SET_PARAMS: {
-+		printk(KERN_ALERT "DEBUG: BLKTAP2_IOCTL_SET_PARAMS AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BLKTAP2_IOCTL_SET_PARAMS AXA %s %d \n",__FUNCTION__,__LINE__);
 +		struct blktap2_params params;
 +		struct blktap_device_info info;
 +
@@ -2483,7 +2499,7 @@ PATCHES
 +	}
 +
 +        case BLKTAP2_IOCTL_PAUSE:
-+		printk(KERN_ALERT "DEBUG: BLKTAP2_IOCTL_PAUSE AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BLKTAP2_IOCTL_PAUSE AXA %s %d \n",__FUNCTION__,__LINE__);
 +		if (!test_bit(BLKTAP_PAUSE_REQUESTED, &tap->dev_inuse))
 +			return -EINVAL;
 +
@@ -2496,7 +2512,7 @@ PATCHES
 +		return 0;
 +
 +	case BLKTAP2_IOCTL_REOPEN:
-+		printk(KERN_ALERT "DEBUG: BLKTAP2_IOCTL_REOPEN AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BLKTAP2_IOCTL_REOPEN AXA %s %d \n",__FUNCTION__,__LINE__);
 +		if (!test_bit(BLKTAP_PAUSED, &tap->dev_inuse))
 +			return -EINVAL;
 +
@@ -2514,7 +2530,7 @@ PATCHES
 +		return 0;
 +
 +	case BLKTAP2_IOCTL_RESUME:
-+		printk(KERN_ALERT "DEBUG: BLKTAP2_IOCTL_RESUME AXA %s %d \n",__FUNCTION__,__LINE__);
++		printk_ratelimited(KERN_ALERT "DEBUG: BLKTAP2_IOCTL_RESUME AXA %s %d \n",__FUNCTION__,__LINE__);
 +		if (!test_bit(BLKTAP_PAUSED, &tap->dev_inuse))
 +			return -EINVAL;
 +
@@ -2533,11 +2549,16 @@ PATCHES
 +
 +static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 +{
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	struct blktap *tap = filp->private_data;
 +	struct blktap_device *tapdev = &tap->device;
 +	struct blktap_ring *ring = &tap->ring;
 +	int work;
++
++	if (!test_bit(BLKTAP_DEVICE, &tap->dev_inuse)) {
++		printk_ratelimited(KERN_ALERT "AXA RET 0; no BLKTAP!\n");
++		return 0;
++	}
 +
 +	poll_wait(filp, &tap->pool->wait, wait);
 +	poll_wait(filp, &ring->poll_wait, wait);
@@ -2547,12 +2568,12 @@ PATCHES
 +		blktap_device_run_queue(tap);
 +	up_read(&current->mm->mmap_sem);
 +*/
-+	spin_lock_irq(&tapdev->lock);
++	//spin_lock_irq(&tapdev->lock);
 +	work = ring->ring.req_prod_pvt - ring->ring.sring->req_prod;
 +	//work = 0;
-+	printk(KERN_ALERT "DEBUG: AXA Before: req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA Before: req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
 +	RING_PUSH_REQUESTS(&ring->ring);
-+	printk(KERN_ALERT "DEBUG: AXA After: req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA After: req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
 +
 +	//int rdy = test_and_clear_bit(1, &tap->rdy);
 +	int rdy = 0;
@@ -2561,12 +2582,12 @@ PATCHES
 +	if (rdy || work ||
 +	    *BLKTAP_RING_MESSAGE(ring->ring.sring) ||
 +	    closed) {
-+		printk(KERN_ALERT "POLLIN: AXA rdy: %i work: %i msg: %i closed: %i \n", rdy, work, *BLKTAP_RING_MESSAGE(ring->ring.sring), closed);
-+		spin_unlock_irq(&tapdev->lock);
++		printk_ratelimited(KERN_ALERT "POLLIN: AXA rdy: %i work: %i msg: %i closed: %i \n", rdy, work, *BLKTAP_RING_MESSAGE(ring->ring.sring), closed);
++		//spin_unlock_irq(&tapdev->lock);
 +		return POLLIN | POLLRDNORM;
 +	}
-+	spin_unlock_irq(&tapdev->lock);
-+	printk(KERN_ALERT "RET 0: AXA %s %d \n",__FUNCTION__,__LINE__);
++	//spin_unlock_irq(&tapdev->lock);
++	printk_ratelimited(KERN_ALERT "RET 0: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	return 0;
 +}
 +
@@ -2583,6 +2604,7 @@ PATCHES
 +void
 +blktap_ring_kick_user(struct blktap *tap)
 +{
++	printk_ratelimited(KERN_ALERT "AXA kicking user... \n");
 +	wake_up(&tap->ring.poll_wait);
 +}
 +
@@ -2653,12 +2675,12 @@ PATCHES
 +blktap_ring_destroy(struct blktap *tap)
 +{
 +	struct blktap_ring *ring = &tap->ring;
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +
 +	if (ring->task || ring->vma || test_bit(BLKTAP_DEVICE, &tap->dev_inuse))
 +		return -EBUSY;
 +
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +	return 0;
 +}
 +
@@ -2731,7 +2753,7 @@ PATCHES
 +
 +	blktap_ring_major = MAJOR(dev);
 +	BTINFO("blktap ring major: %d\n", blktap_ring_major);
-+	printk(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
 +
 +	return 0;
 +}
