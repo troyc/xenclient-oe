@@ -47,3 +47,42 @@ SRC_URI += "${KERNELORG_MIRROR}/linux/kernel/v${PV_MAJOR}.x/linux-${PV}.tar.xz;n
 LIC_FILES_CHKSUM = "file://COPYING;md5=bbea815ee2795b2f4230826c0c6b8814"
 SRC_URI[kernel.md5sum] = "bf96b6783a2d11178a2aaa3cf376f975"
 SRC_URI[kernel.sha256sum] = "293ec1ae0f6b3b4be83a217224b51d137f2163cf2d9d294eecf5d0a354e4e29d"
+
+do_configure_append_openxt-installer(){
+    # vglass supports radeon and nouveau DRM.
+    kernel_conf_variable DRM_RADEON m
+    kernel_conf_variable DRM_NOUVEAU m
+
+    # vglass can handle touchscreen and pen devices.
+    kernel_conf_variable I2C_HID m
+    kernel_conf_variable HID_WACOM m
+    ## Designware
+    kernel_conf_variable I2C_DESIGNWARE m
+    kernel_conf_variable I2C_DESIGNWARE_PLATFORM m
+    ## HP Elite x2
+    kernel_conf_variable PINCTRL_SUNRISEPOINT m
+    kernel_conf_variable MFD_INTEL_LPSS_PCI m
+}
+
+do_configure_append_xenclient-dom0(){
+    # vglass supports radeon and nouveau DRM.
+    kernel_conf_variable DRM_RADEON m
+    kernel_conf_variable DRM_NOUVEAU m
+
+    # vglass can handle touchscreen and pen devices.
+    kernel_conf_variable I2C_HID m
+    kernel_conf_variable HID_WACOM m
+    ## Designware
+    kernel_conf_variable I2C_DESIGNWARE m
+    kernel_conf_variable I2C_DESIGNWARE_PLATFORM m
+    ## HP Elite x2
+    kernel_conf_variable PINCTRL_SUNRISEPOINT m
+    kernel_conf_variable MFD_INTEL_LPSS_PCI m
+}
+
+do_configure_append_xenclient-uivm(){
+    # openxtfb requires framebuffer support. Use XEN_FBDEV_FRONTEND to select
+    # all required support.
+    kernel_conf_variable FB_MODE_HELPERS y
+    kernel_conf_variable XEN_FBDEV_FRONTEND m
+}
