@@ -617,7 +617,7 @@ PATCHES
 +MODULE_LICENSE("Dual BSD/GPL");
 --- /dev/null
 +++ b/drivers/block/blktap/device.c
-@@ -0,0 +1,848 @@
+@@ -0,0 +1,855 @@
 +#include <linux/fs.h>
 +#include <linux/blkdev.h>
 +#include <linux/cdrom.h>
@@ -956,6 +956,7 @@ PATCHES
 +blktap_queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_queue_data *bd)
 +{
 +	struct blktap_device *tapdev = hctx->queue->queuedata;
++	unsigned long flags;
 +	if (tapdev == 0) {
 +		printk_ratelimited(KERN_ALERT "AXA NULL tapdev \n");
 +		return BLK_STS_RESOURCE;
@@ -982,8 +983,9 @@ PATCHES
 +		return BLK_STS_RESOURCE;
 +	}
 +//AXA
-+	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
-+	//spin_lock_irq(&tapdev->lock);
++	printk_ratelimited(KERN_ALERT "AXA~ %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "AXAB: in_interrupt: %i in_softirq: %i in_irq: %i current: %i s: %i \n", in_interrupt(), in_softirq(), in_irq(), current, &ring->vma->vm_mm->mmap_sem);
++	//spin_lock_irqsave(&tapdev->lock, flags);
 +	blk_mq_start_request(req);
 +
 +	//down_read(&current->mm->mmap_sem);
@@ -1007,7 +1009,7 @@ PATCHES
 +	else
 +		printk_ratelimited(KERN_ALERT "AXA not kicking user... \n");
 +
-+	//spin_unlock_irq(&tapdev->lock);
++	//spin_unlock_irqrestore(&tapdev->lock, flags);
 +	//msleep(20);
 +	return BLK_STS_OK;
 +}
@@ -1031,10 +1033,12 @@ PATCHES
 +blktap_device_restart(struct blktap *tap)
 +{
 +        struct blktap_device *dev;
++	unsigned long flags;
 +
 +        dev = &tap->device;
++	printk_ratelimited(KERN_ALERT "AXAB restart: in_interrupt: %i in_softirq: %i in_irq: %i current: %i\n", in_interrupt(), in_softirq(), in_irq(), current);
 +
-+        //spin_lock_irq(&dev->lock);
++        //spin_lock_irqsave(&dev->lock, flags);
 +
 +        /* Re-enable calldowns. */
 +        if (dev->gd) {
@@ -1047,7 +1051,7 @@ PATCHES
 +                blktap_device_do_request(rq);
 +        }
 +
-+        //spin_unlock_irq(&dev->lock);
++        //spin_unlock_irqrestore(&dev->lock, flags);
 +}
 +
 +void
@@ -1263,9 +1267,11 @@ PATCHES
 +{
 +	struct blktap_device *tapdev = &tap->device;
 +	struct request_queue *q = tapdev->gd->queue;
++	unsigned long flags;
 +
 +	blk_queue_flag_clear(QUEUE_FLAG_STOPPED, q);
-+	//spin_lock_irq(&tapdev->lock);
++	//spin_lock_irqsave(&tapdev->lock, flags);
++	printk_ratelimited(KERN_ALERT "AXAB fail_queue: in_interrupt: %i in_softirq: %i in_irq: %i current: %i\n", in_interrupt(), in_softirq(), in_irq(), current);
 +
 +	do {
 +		printk_ratelimited(KERN_ALERT "DEBUG: BAD AXA %s %d \n",__FUNCTION__,__LINE__);
@@ -1276,7 +1282,7 @@ PATCHES
 +		__blktap_end_queued_rq(rq, -EIO);
 +	} while (1);
 +
-+	//spin_unlock_irq(&tapdev->lock);
++	//spin_unlock_irqrestore(&tapdev->lock, flags);
 +}
 +
 +int
@@ -1311,12 +1317,13 @@ PATCHES
 +	minor  = tap->minor;
 +
 +	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "AXAB: in_interrupt: %i in_softirq: %i in_irq: %i current: %i\n", in_interrupt(), in_softirq(), in_irq(), current);
 +	tapdev->tap = tap;	//AXA it doesn't really go here.
 +
 +	tapdev->tag_set.ops = &blktap_mq_ops;
 +	tapdev->tag_set.queue_depth = 128;
 +	tapdev->tag_set.numa_node = NUMA_NO_NODE;
-+	tapdev->tag_set.flags = BLK_MQ_F_SHOULD_MERGE;
++	tapdev->tag_set.flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_BLOCKING; //AXA todo: remove blocking
 +	tapdev->tag_set.driver_data = tapdev;
 +	tapdev->tag_set.nr_hw_queues = 1;
 +
@@ -1896,7 +1903,7 @@ PATCHES
 +}
 --- /dev/null
 +++ b/drivers/block/blktap/ring.c
-@@ -0,0 +1,873 @@
+@@ -0,0 +1,875 @@
 +
 +#include <linux/device.h>
 +#include <linux/signal.h>
@@ -2550,6 +2557,7 @@ PATCHES
 +static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 +{
 +	printk_ratelimited(KERN_ALERT "DEBUG: AXA %s %d \n",__FUNCTION__,__LINE__);
++	printk_ratelimited(KERN_ALERT "AXAB: in_interrupt: %i in_softirq: %i in_irq: %i current: %i s: %i \n", in_interrupt(), in_softirq(), in_irq(), current, &current->mm->mmap_sem);
 +	struct blktap *tap = filp->private_data;
 +	struct blktap_device *tapdev = &tap->device;
 +	struct blktap_ring *ring = &tap->ring;
@@ -2569,6 +2577,7 @@ PATCHES
 +	up_read(&current->mm->mmap_sem);
 +*/
 +	//spin_lock_irq(&tapdev->lock);
++	//todo synchronization?
 +	work = ring->ring.req_prod_pvt - ring->ring.sring->req_prod;
 +	//work = 0;
 +	printk_ratelimited(KERN_ALERT "DEBUG: AXA Before: req_prod_pvt %i req_prod %i \n",ring->ring.req_prod_pvt,ring->ring.sring->req_prod);
