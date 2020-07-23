@@ -27,4 +27,5 @@ RDEPENDS_${PN} = " \
     sysvinit-pidof \
     nano \
     blktrace \
+    kexec-tools \
 "
