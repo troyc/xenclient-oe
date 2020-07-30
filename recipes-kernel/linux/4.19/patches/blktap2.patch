@@ -19,6 +19,7 @@ CHANGELOG
 Port to 3.18: Eric Chanudet <chanudete@ainfosec.com>
 Port to 4.14: Richard Turner <turnerr@ainfosec.com>
 Port to 4.19: Richard Turner <turnerr@ainfosec.com>
+Port to 5.4: Troy Crosley <crosleyt@ainfosec.com>
 
 ###############################################################################i
 REMOVAL 
@@ -40,7 +41,7 @@ PATCHES
 ################################################################################
 --- a/drivers/block/Kconfig
 +++ b/drivers/block/Kconfig
-@@ -481,4 +481,13 @@ config BLK_DEV_RSXX
+@@ -468,4 +468,13 @@ config BLK_DEV_RSXX
  	  To compile this driver as a module, choose M here: the
  	  module will be called rsxx.
  
@@ -56,7 +57,7 @@ PATCHES
  endif # BLK_DEV
 --- a/drivers/block/Makefile
 +++ b/drivers/block/Makefile
-@@ -26,6 +26,7 @@ obj-$(CONFIG_BLK_DEV_UMEM)	+= umem.o
+@@ -25,6 +25,7 @@ obj-$(CONFIG_BLK_DEV_UMEM)	+= umem.o
  obj-$(CONFIG_BLK_DEV_NBD)	+= nbd.o
  obj-$(CONFIG_BLK_DEV_CRYPTOLOOP) += cryptoloop.o
  obj-$(CONFIG_VIRTIO_BLK)	+= virtio_blk.o
@@ -72,7 +73,7 @@ PATCHES
 +blktap-objs := control.o ring.o device.o request.o sysfs.o
 --- /dev/null
 +++ b/drivers/block/blktap/blktap.h
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,177 @@
 +#ifndef _BLKTAP_H_
 +#define _BLKTAP_H_
 +
@@ -82,6 +83,7 @@ PATCHES
 +#include <linux/init.h>
 +#include <linux/scatterlist.h>
 +#include <linux/blktap.h>
++#include <linux/blk-mq.h>
 +
 +extern int blktap_debug_level;
 +extern int blktap_ring_major;
@@ -114,8 +116,9 @@ PATCHES
 +#define BLKTAP2_RING_MESSAGE_RESUME  2
 +
 +struct blktap_device {
-+	spinlock_t                     lock;
 +	struct gendisk                *gd;
++	struct blktap                 *tap;
++	struct blk_mq_tag_set          tag_set;
 +};
 +
 +struct blktap_request;
@@ -611,7 +614,7 @@ PATCHES
 +MODULE_LICENSE("Dual BSD/GPL");
 --- /dev/null
 +++ b/drivers/block/blktap/device.c
-@@ -0,0 +1,684 @@
+@@ -0,0 +1,614 @@
 +#include <linux/fs.h>
 +#include <linux/blkdev.h>
 +#include <linux/cdrom.h>
@@ -690,8 +693,7 @@ PATCHES
 +		return 0;
 +
 +	case SCSI_IOCTL_GET_IDLUN:
-+		if (!access_ok(VERIFY_WRITE, argument,
-+			sizeof(struct scsi_idlun)))
++		if (!access_ok(argument, sizeof(struct scsi_idlun)))
 +			return -EFAULT;
 +
 +		/* return 0 for now. */
@@ -717,46 +719,6 @@ PATCHES
 +	.getgeo    = blktap_device_getgeo
 +};
 +
-+/* NB. __blktap holding the queue lock; blktap where unlocked */
-+
-+static inline struct request*
-+__blktap_next_queued_rq(struct request_queue *q)
-+{
-+	return blk_peek_request(q);
-+}
-+
-+static inline void
-+__blktap_dequeue_rq(struct request *rq)
-+{
-+	blk_start_request(rq);
-+}
-+
-+/* NB. err == 0 indicates success, failures < 0 */
-+
-+static inline void
-+__blktap_end_queued_rq(struct request *rq, int err)
-+{
-+	rq->cmd_flags |= RQF_QUIET;
-+	blk_start_request(rq);
-+	__blk_end_request(rq, err, blk_rq_bytes(rq));
-+}
-+
-+static inline void
-+__blktap_end_rq(struct request *rq, int err)
-+{
-+	__blk_end_request(rq, err, blk_rq_bytes(rq));
-+}
-+
-+static inline void
-+blktap_end_rq(struct request *rq, int err)
-+{
-+	struct request_queue *q = rq->q;
-+
-+	spin_lock_irq(q->queue_lock);
-+	__blktap_end_rq(rq, err);
-+	spin_unlock_irq(q->queue_lock);
-+}
-+
 +void
 +blktap_device_end_request(struct blktap *tap,
 +			  struct blktap_request *request,
@@ -773,7 +735,7 @@ PATCHES
 +		"end_request: op=%d error=%d bytes=%d\n",
 +		rq_data_dir(rq), error, blk_rq_bytes(rq));
 +
-+	blktap_end_rq(rq, error);
++	blk_mq_complete_request(rq);
 +}
 +
 +int
@@ -852,57 +814,37 @@ PATCHES
 +	goto _out;
 +}
 +
-+/*
-+ * called from tapdisk context
-+ */
-+void
-+blktap_device_run_queue(struct blktap *tap)
++static blk_status_t
++blktap_queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_queue_data *bd)
 +{
-+	struct blktap_device *tapdev = &tap->device;
-+	struct request_queue *q;
-+	struct request *rq;
-+	int err;
++	struct blktap_device *tapdev = hctx->queue->queuedata;
++	unsigned long flags;
++	struct request *req = bd->rq;
++	struct blktap_ring *ring = &tapdev->tap->ring;
 +
-+	if (!tapdev->gd)
-+		return;
++	blk_mq_start_request(req);
 +
-+	q = tapdev->gd->queue;
++	down_read(&ring->vma->vm_mm->mmap_sem);
++	if (ring->vma)
++		blktap_device_make_request(tapdev->tap, req);
++	up_read(&ring->vma->vm_mm->mmap_sem);
 +
-+	blk_queue_flag_clear(QUEUE_FLAG_STOPPED, q);
-+	spin_lock_irq(&tapdev->lock);
++        if (bd->last)
++                blktap_ring_kick_user(tapdev->tap);
 +
-+	do {
-+		rq = __blktap_next_queued_rq(q);
-+		if (!rq)
-+			break;
++        return BLK_STS_OK;
++}
 +
-+		spin_unlock_irq(&tapdev->lock);
-+
-+		err = blktap_device_make_request(tap, rq);
-+
-+		spin_lock_irq(&tapdev->lock);
-+
-+		if (err == -EBUSY) {
-+			blk_stop_queue(q);
-+			break;
-+		}
-+
-+		__blktap_dequeue_rq(rq);
-+
-+		if (unlikely(err))
-+			__blktap_end_rq(rq, err);
-+	} while (1);
-+
-+	spin_unlock_irq(&tapdev->lock);
++static inline void blktap_request_done(struct request *rq)
++{
++	blk_mq_end_request(rq, BLK_STS_OK);
 +}
 +
 +static void
-+blktap_device_do_request(struct request_queue *rq)
++blktap_commit_rqs(struct blk_mq_hw_ctx *hctx)
 +{
-+	struct blktap_device *tapdev = rq->queuedata;
-+	struct blktap *tap = dev_to_blktap(tapdev);
-+
-+	blktap_ring_kick_user(tap);
++	struct blktap_device *tapdev = hctx->queue->queuedata;
++	blktap_ring_kick_user(tapdev->tap);
 +}
 +
 +static void
@@ -912,20 +854,16 @@ PATCHES
 +
 +        dev = &tap->device;
 +
-+        spin_lock_irq(&dev->lock);
-+
 +        /* Re-enable calldowns. */
 +        if (dev->gd) {
 +                struct request_queue *rq = dev->gd->queue;
 +
-+                if (blk_queue_stopped(rq))
-+                        blk_start_queue(rq);
++                if (blk_mq_queue_stopped(rq))
++                        blk_mq_start_stopped_hw_queues(rq, true);
 +
 +                /* Kick things off immediately. */
-+                blktap_device_do_request(rq);
++		blktap_ring_kick_user(tap);
 +        }
-+
-+        spin_unlock_irq(&dev->lock);
 +}
 +
 +void
@@ -1065,12 +1003,8 @@ PATCHES
 +	if (test_bit(BLKTAP_PAUSED, &tap->dev_inuse))
 +		return 0;
 +
-+	spin_lock_irqsave(&dev->lock, flags);
-+
-+	blk_stop_queue(dev->gd->queue);
++	blk_mq_stop_hw_queues(dev->gd->queue);
 +	set_bit(BLKTAP_PAUSE_REQUESTED, &tap->dev_inuse);
-+
-+	spin_unlock_irqrestore(&dev->lock, flags);
 +
 +	return blktap_ring_pause(tap);
 +}
@@ -1107,6 +1041,8 @@ PATCHES
 +
 +	blk_cleanup_queue(gd->queue);
 +
++	blk_mq_free_tag_set(&tapdev->tag_set);
++
 +	put_disk(gd);
 +	tapdev->gd = NULL;
 +
@@ -1124,37 +1060,21 @@ PATCHES
 +	return err;
 +}
 +
-+static void
-+blktap_device_fail_queue(struct blktap *tap)
-+{
-+	struct blktap_device *tapdev = &tap->device;
-+	struct request_queue *q = tapdev->gd->queue;
-+
-+	blk_queue_flag_clear(QUEUE_FLAG_STOPPED, q);
-+	spin_lock_irq(&tapdev->lock);
-+
-+	do {
-+		struct request *rq = __blktap_next_queued_rq(q);
-+		if (!rq)
-+			break;
-+
-+		__blktap_end_queued_rq(rq, -EIO);
-+	} while (1);
-+
-+	spin_unlock_irq(&tapdev->lock);
-+}
-+
 +int
 +blktap_device_try_destroy(struct blktap *tap)
 +{
 +	int err;
 +
 +	err = blktap_device_destroy(tap);
-+	if (err)
-+		blktap_device_fail_queue(tap);
 +
 +	return err;
 +}
++
++static const struct blk_mq_ops blktap_mq_ops = {
++	.queue_rq       = blktap_queue_rq,
++	.commit_rqs     = blktap_commit_rqs,
++	.complete       = blktap_request_done,
++};
 +
 +int
 +blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
@@ -1169,6 +1089,19 @@ PATCHES
 +	tapdev = &tap->device;
 +	minor  = tap->minor;
 +
++	tapdev->tap = tap;
++
++	tapdev->tag_set.ops = &blktap_mq_ops;
++	tapdev->tag_set.queue_depth = 128;
++	tapdev->tag_set.numa_node = NUMA_NO_NODE;
++	tapdev->tag_set.flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_BLOCKING;
++	tapdev->tag_set.driver_data = tapdev;
++	tapdev->tag_set.nr_hw_queues = 1;
++
++	err = blk_mq_alloc_tag_set(&tapdev->tag_set);
++	if (err)
++		return -ENOMEM;
++
 +	if (test_bit(BLKTAP_DEVICE, &tap->dev_inuse))
 +		return -EEXIST;
 +
@@ -1178,7 +1111,7 @@ PATCHES
 +	gd = alloc_disk(1);
 +	if (!gd) {
 +		err = -ENOMEM;
-+		goto fail;
++		goto fail_free_tags;
 +	}
 +
 +	if (minor < 26) {
@@ -1199,13 +1132,11 @@ PATCHES
 +	gd->fops = &blktap_device_file_operations;
 +	gd->private_data = tapdev;
 +
-+	spin_lock_init(&tapdev->lock);
-+	rq = blk_init_queue(blktap_device_do_request, &tapdev->lock);
++	rq = blk_mq_init_queue(&tapdev->tag_set);
 +	if (!rq) {
 +		err = -ENOMEM;
-+		goto fail;
++		goto fail_free_tags;
 +	}
-+	elevator_init(rq);
 +
 +	gd->queue     = rq;
 +	rq->queuedata = tapdev;
@@ -1229,7 +1160,9 @@ PATCHES
 +
 +	return 0;
 +
-+fail:
++fail_free_tags:
++	blk_mq_free_tag_set(&tapdev->tag_set);
++
 +	if (gd)
 +		del_gendisk(gd);
 +	if (rq)
@@ -1442,7 +1375,7 @@ PATCHES
 +		return;
 +
 +	BUG_ON(seg >= request->nr_pages);
-+	
++
 +	s = sg_virt(sg);
 +	p = page_address(request->pages[seg]);
 +	if (!s || !p)
@@ -1726,7 +1659,7 @@ PATCHES
 +}
 --- /dev/null
 +++ b/drivers/block/blktap/ring.c
-@@ -0,0 +1,805 @@
+@@ -0,0 +1,804 @@
 +
 +#include <linux/device.h>
 +#include <linux/signal.h>
@@ -1831,7 +1764,8 @@ PATCHES
 +	 ((_req) * BLKTAP_SEGMENT_MAX * BLKTAP_PAGE_SIZE) +	\
 +	 ((_seg) * BLKTAP_PAGE_SIZE))
 +
-+static int blktap_ring_fault(struct vm_fault *vmf)
++static unsigned int
++blktap_ring_fault(struct vm_fault *vmf)
 +{
 +	return VM_FAULT_SIGBUS;
 +}
@@ -2339,13 +2273,11 @@ PATCHES
 +	struct blktap_ring *ring = &tap->ring;
 +	int work;
 +
++	if (!test_bit(BLKTAP_DEVICE, &tap->dev_inuse))
++		return 0;
++
 +	poll_wait(filp, &tap->pool->wait, wait);
 +	poll_wait(filp, &ring->poll_wait, wait);
-+
-+	down_read(&current->mm->mmap_sem);
-+	if (ring->vma && tap->device.gd)
-+		blktap_device_run_queue(tap);
-+	up_read(&current->mm->mmap_sem);
 +
 +	work = ring->ring.req_prod_pvt - ring->ring.sring->req_prod;
 +	RING_PUSH_REQUESTS(&ring->ring);
@@ -3017,46 +2949,3 @@ PATCHES
 +};
 +
 +#endif /* _LINUX_BLKTAP_H */
---- a/block/blk.h
-+++ b/block/blk.h
-@@ -239,11 +239,9 @@ static inline void elv_deactivate_rq(str
- 		e->type->ops.sq.elevator_deactivate_req_fn(q, rq);
- }
- 
--int elevator_init(struct request_queue *);
- int elevator_init_mq(struct request_queue *q);
- int elevator_switch_mq(struct request_queue *q,
- 			      struct elevator_type *new_e);
--void elevator_exit(struct request_queue *, struct elevator_queue *);
- int elv_register_queue(struct request_queue *q);
- void elv_unregister_queue(struct request_queue *q);
- 
---- a/block/elevator.c
-+++ b/block/elevator.c
-@@ -239,6 +239,7 @@ out_unlock:
- 	mutex_unlock(&q->sysfs_lock);
- 	return err;
- }
-+EXPORT_SYMBOL(elevator_init);
- 
- void elevator_exit(struct request_queue *q, struct elevator_queue *e)
- {
-@@ -251,6 +252,7 @@ void elevator_exit(struct request_queue
- 
- 	kobject_put(&e->kobj);
- }
-+EXPORT_SYMBOL(elevator_exit);
- 
- static inline void __elv_rqhash_del(struct request *rq)
- {
---- a/include/linux/elevator.h
-+++ b/include/linux/elevator.h
-@@ -219,6 +219,8 @@ extern void elv_unregister(struct elevat
- extern ssize_t elv_iosched_show(struct request_queue *, char *);
- extern ssize_t elv_iosched_store(struct request_queue *, const char *, size_t);
- 
-+extern int elevator_init(struct request_queue *);
-+extern void elevator_exit(struct request_queue *, struct elevator_queue *);
- extern bool elv_bio_merge_ok(struct request *, struct bio *);
- extern struct elevator_queue *elevator_alloc(struct request_queue *,
- 					struct elevator_type *);
