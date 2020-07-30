@@ -248,7 +248,7 @@
 +	return ret;
 +}
 +
-+static int 
++static int
 +i915_gem_foreign_get_pages(struct drm_i915_gem_object *obj)
 +{
 +	struct i915_gem_foreign *fo = &obj->foreign;
