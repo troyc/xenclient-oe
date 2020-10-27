@@ -7,7 +7,6 @@ S = "${WORKDIR}/${PN}-${PV}"
 
 SRC_URI = " \
     https://downloads.sourceforge.net/project/${BPN}/${BPN}/${BPN}-${PV}.tar.gz \
-    file://0001-config-Allow-build-system-integration.patch \
     file://0002-grub2-Adjust-module-placement-locations-when-changin.patch \
     file://0003-tboot-Propagate-failure-to-map_tboot_pages.patch \
     file://0004-tboot-TB_POLTYPE_WARN_ON_FAILURE-with-pre-post.patch \
@@ -18,12 +17,11 @@ SRC_URI = " \
     file://0010-tboot-Export-TPM-event-log-to-VMM-Kernel.patch \
     file://0012-Find-e820-regions-that-include-the-limit.patch \
     file://0013-Add-support-for-launching-64-bit-PE-kernels.patch \
-    file://0014-safestringlib-Attend-GCC-warnings.patch \
     file://gcc9.patch \
 "
 
-SRC_URI[md5sum] = "5454cae3bf4c4ba47e7dac14ea3088b4"
-SRC_URI[sha256sum] = "d6f2334ae41b90e8403a2cd91a819d54356edcb81af2924f47774c72e48d3a9e"
+SRC_URI[md5sum] = "29cc2524e48eaba12249d3476be219b2"
+SRC_URI[sha256sum] = "007212deacab8eb159d71449766f9b2e0523439f1c4fd64d1932eb38cb60e053"
 
 inherit deploy
 
