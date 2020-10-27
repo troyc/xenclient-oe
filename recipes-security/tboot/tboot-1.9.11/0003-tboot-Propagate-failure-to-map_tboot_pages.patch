@@ -21,11 +21,11 @@ Signed-off-by: Eric Chanudet <chanudete@ainfosec.com>
  tboot/common/paging.c | 19 +++++++++++++------
  1 file changed, 13 insertions(+), 6 deletions(-)
 
-diff --git a/tboot/common/paging.c b/tboot/common/paging.c
-index 13b31c9..14de4cc 100644
---- a/tboot/common/paging.c
-+++ b/tboot/common/paging.c
-@@ -116,7 +116,7 @@ void map_pages_to_tboot(unsigned long vstart,
+Index: tboot-1.9.11/tboot/common/paging.c
+===================================================================
+--- tboot-1.9.11.orig/tboot/common/paging.c
++++ tboot-1.9.11/tboot/common/paging.c
+@@ -116,7 +116,7 @@ void map_pages_to_tboot(unsigned long vs
  }
  
  /* map tboot pages into tboot */
@@ -34,7 +34,7 @@ index 13b31c9..14de4cc 100644
  {
      uint64_t start, end;
  
-@@ -131,10 +131,11 @@ static void map_tboot_pages(unsigned long pfn, unsigned long nr_pfns)
+@@ -131,10 +131,11 @@ static void map_tboot_pages(unsigned lon
      if ( end > DIRECTMAP_VIRT_END ) {
          printk(TBOOT_ERR"0x%llx ~ 0x%llx cannot be mapped as direct map\n", start, end);
          disable_paging();
@@ -47,7 +47,7 @@ index 13b31c9..14de4cc 100644
  }
  
  /* destroy the map */
-@@ -187,13 +188,15 @@ static unsigned long build_directmap_pagetable(void)
+@@ -187,13 +188,15 @@ static unsigned long build_directmap_pag
      tboot_epfn = ((unsigned long)(TBOOT_KERNEL_CMDLINE_ADDR
                       + TBOOT_KERNEL_CMDLINE_SIZE + MAC_PAGE_SIZE - 1))
                       >> TB_L1_PAGETABLE_SHIFT;
@@ -87,6 +87,3 @@ index 13b31c9..14de4cc 100644
  
      /* enable interrupts */
      write_eflags(eflags);
--- 
-2.20.1
-
