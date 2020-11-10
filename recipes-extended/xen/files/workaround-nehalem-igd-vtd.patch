@@ -71,7 +71,7 @@ This is a work-around for OpenXT; it should not be upstreamed.
      return 0;
  }
  
-+static int is_hardware_domain_mapping(struct iommu * iommu)
++static int is_hardware_domain_mapping(struct vtd_iommu * iommu)
 +{
 +    unsigned long nr_dom, i;
 +
@@ -131,12 +131,12 @@ This is a work-around for OpenXT; it should not be upstreamed.
 +    //(Note that device is on bus zero, and this an integrated component of
 +    //the CPU for platforms supporting VTD. As a result, this makes it
 +    //reasonable to trust its vendor ID.)
-+    vid = pci_conf_read16(0, 0, IGD_DEV, 0, 0);
++    vid = pci_conf_read16(IGD_DEV, 0);
 +    if(vid != 0x8086)
 +      return 0;
 +
 +    //And check the product ID of the device.
-+    pid = pci_conf_read16(0, 0, IGD_DEV, 0, 2);
++    pid = pci_conf_read16(IGD_DEV, 2);
 +    return (pid == 0x0042);
 +}
 +

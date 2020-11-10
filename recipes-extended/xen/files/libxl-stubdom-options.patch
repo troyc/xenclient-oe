@@ -69,14 +69,14 @@ PATCHES
      dm_config->disks = guest_config->disks;
      dm_config->num_disks = guest_config->num_disks;
 @@ -2261,6 +2264,8 @@ void libxl__spawn_stub_dm(libxl__egc *eg
-                               libxl__xenfirmwaredir_path());
-         stubdom_state->pv_ramdisk.path = libxl__abs_path(gc, "stubdomain-initramfs",
-                                                          libxl__xenfirmwaredir_path());
-+        stubdom_state->pv_cmdline =
-+            libxl__strdup(gc, guest_config->b_info.stubdom_cmdline);
-         break;
-     default:
-         abort();
+     stubdom_state->pv_kernel.path = guest_config->b_info.stubdomain_kernel;
+     stubdom_state->pv_ramdisk.path = guest_config->b_info.stubdomain_ramdisk;
+
++    stubdom_state->pv_cmdline =
++        libxl__strdup(gc, guest_config->b_info.stubdom_cmdline);
+     /* fixme: this function can leak the stubdom if it fails */
+     ret = libxl__domain_make(gc, dm_config, stubdom_state,
+                              &sdss->pvqemu.guest_domid, false);
 --- a/tools/xl/xl_parse.c
 +++ b/tools/xl/xl_parse.c
 @@ -2486,6 +2486,17 @@ skip_usbdev:

@@ -1,4 +1,4 @@
-################################################################################
+###############################################################################
 SHORT DESCRIPTION:
 ################################################################################
 Unbreak Haswell systems by suppressing HLE, RTM features from CPUID.
@@ -61,6 +61,6 @@ PATCHES
 +
 +    __clear_bit(X86_FEATURE_HLE, c->x86_capability);
 +    __clear_bit(X86_FEATURE_RTM, c->x86_capability);
- }
- 
- static const struct cpu_dev intel_cpu_dev = {
+
+ 	if ((opt_cpu_info && !(c->apicid & (c->x86_num_siblings - 1))) ||
+ 	    c == &boot_cpu_data )

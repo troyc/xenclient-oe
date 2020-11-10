@@ -34,8 +34,8 @@ INTERNAL DEPENDENCIES
 ################################################################################
 PATCHES 
 ################################################################################
---- a/xen/arch/x86/Rules.mk
-+++ b/xen/arch/x86/Rules.mk
+--- a/xen/arch/x86/arch.mk
++++ b/xen/arch/x86/arch.mk
 @@ -37,7 +37,7 @@ CFLAGS += -mno-red-zone -fpic -fno-async
  
  # Xen doesn't use SSE interally.  If the compiler supports it, also skip the
@@ -43,5 +43,5 @@ PATCHES
 -CFLAGS += -mno-sse $(call cc-option,$(CC),-mskip-rax-setup)
 +CFLAGS += -mno-sse -mfpmath=387 $(call cc-option,$(CC),-mskip-rax-setup)
  
- # -fvisibility=hidden reduces -fpic cost, if it's available
- ifneq ($(call cc-option,$(CC),-fvisibility=hidden,n),n)
+ # Compile with thunk-extern, indirect-branch-register if avaiable.
+ CFLAGS-$(CONFIG_INDIRECT_THUNK) += -mindirect-branch=thunk-extern

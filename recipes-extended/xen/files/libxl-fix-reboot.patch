@@ -91,13 +91,13 @@ PATCHES
      fprintf(stderr, "Rebooting domain %u\n", domid);
      libxl_update_state(ctx, domid, "rebooting");
 +    libxl_set_reboot(ctx, domid, 1);
-     rc=libxl_domain_reboot(ctx, domid);
+     rc = libxl_domain_reboot(ctx, domid, NULL);
      if (rc == ERROR_NOPARAVIRT) {
          if (fallback_trigger) {
              fprintf(stderr, "PV control interface not available:"
                      " sending ACPI reset button event.\n");
--            rc = libxl_send_trigger(ctx, domid, LIBXL_TRIGGER_RESET, 0);
-+            rc = libxl_send_trigger(ctx, domid, LIBXL_TRIGGER_POWER, 0);
+-            rc = libxl_send_trigger(ctx, domid, LIBXL_TRIGGER_RESET, 0, NULL);
++            rc = libxl_send_trigger(ctx, domid, LIBXL_TRIGGER_POWER, 0, NULL);
          } else {
              fprintf(stderr, "PV control interface not available:"
                      " external graceful reboot not possible.\n");

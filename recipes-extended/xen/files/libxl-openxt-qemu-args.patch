@@ -37,16 +37,14 @@ PATCHES
 --- a/tools/libxl/libxl_dm.c
 +++ b/tools/libxl/libxl_dm.c
 @@ -1168,17 +1168,15 @@ static int libxl__build_device_model_arg
-                       "-xen-domid",
-                       GCSPRINTF("%d", guest_domid), NULL);
- 
--    /* There is currently no way to access the QMP socket in the stubdom */
+     * vchan-socket-proxy.
+     */
      if (!is_stubdom) {
 -        flexarray_append(dm_args, "-chardev");
 +        flexarray_append(dm_args, "-qmp");
-         flexarray_append(dm_args,
--                         GCSPRINTF("socket,id=libxl-cmd,"
--                                        "path=%s/qmp-libxl-%d,server,nowait",
+         if (state->dm_monitor_fd >= 0) {
+             flexarray_append(dm_args,
+-                         GCSPRINTF("socket,id=libxl-cmd,fd=%d,server,nowait",
 +                         GCSPRINTF("unix:%s/qmp-libxl-%d,server,nowait",
                                          libxl__run_dir_path(), guest_domid));
 -

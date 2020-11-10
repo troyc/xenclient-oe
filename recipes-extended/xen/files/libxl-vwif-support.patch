@@ -94,41 +94,13 @@ PATCHES
      return nextid;
  }
  
-@@ -1608,9 +1620,11 @@ static int add_device(libxl__egc *egc, l
- 
-     switch(dev->backend_kind) {
-     case LIBXL__DEVICE_KIND_VBD:
-+    case LIBXL__DEVICE_KIND_VWIF:
-     case LIBXL__DEVICE_KIND_VIF:
--        if (dev->backend_kind == LIBXL__DEVICE_KIND_VBD) dguest->num_vbds++;
--        if (dev->backend_kind == LIBXL__DEVICE_KIND_VIF) dguest->num_vifs++;
-+        if (dev->backend_kind == LIBXL__DEVICE_KIND_VBD)  dguest->num_vbds++;
-+        if (dev->backend_kind == LIBXL__DEVICE_KIND_VWIF) dguest->num_vifs++;
-+        if (dev->backend_kind == LIBXL__DEVICE_KIND_VIF)  dguest->num_vifs++;
- 
-         GCNEW(aodev);
-         libxl__prepare_ao_device(ao, aodev);
-@@ -1656,9 +1670,11 @@ static int remove_device(libxl__egc *egc
- 
-     switch(ddev->dev->backend_kind) {
-     case LIBXL__DEVICE_KIND_VBD:
-+    case LIBXL__DEVICE_KIND_VWIF:
-     case LIBXL__DEVICE_KIND_VIF:
--        if (dev->backend_kind == LIBXL__DEVICE_KIND_VBD) dguest->num_vbds--;
--        if (dev->backend_kind == LIBXL__DEVICE_KIND_VIF) dguest->num_vifs--;
-+        if (dev->backend_kind == LIBXL__DEVICE_KIND_VBD)  dguest->num_vbds--;
-+        if (dev->backend_kind == LIBXL__DEVICE_KIND_VWIF) dguest->num_vifs--;
-+        if (dev->backend_kind == LIBXL__DEVICE_KIND_VIF)  dguest->num_vifs--;
- 
-         GCNEW(aodev);
-         libxl__prepare_ao_device(ao, aodev);
 --- a/tools/libxl/libxl_dm.c
 +++ b/tools/libxl/libxl_dm.c
 @@ -1491,9 +1491,12 @@ static int libxl__build_device_model_arg
                                                  LIBXL_NIC_TYPE_VIF_IOEMU);
                  flexarray_append(dm_args, "-device");
                  flexarray_append(dm_args,
--                   GCSPRINTF("%s,id=vif%d,netdev=net%d,mac=%s",
+-                   GCSPRINTF("%s,id=nic%d,netdev=net%d,mac=%s",
 -                             nics[i].model, nics[i].devid,
 -                             nics[i].devid, smac));
 +                   GCSPRINTF("%s,id=%s%d,netdev=net%d,mac=%s",
@@ -310,10 +282,10 @@ PATCHES
 --- a/tools/libxl/libxl_types_internal.idl
 +++ b/tools/libxl/libxl_types_internal.idl
 @@ -30,6 +30,7 @@ libxl__device_kind = Enumeration("device
-     (13, "VUART"),
      (14, "PVCALLS"),
      (15, "VSND"),
-+    (16, "VWIF"),
+     (16, "VINPUT"),
++    (17, "VWIF"),
      ])
  
  libxl__console_backend = Enumeration("console_backend", [

@@ -1,35 +1,55 @@
-diff --git a/tools/Makefile b/tools/Makefile
-index c903d6a63e..d0c6daaea2 100644
 --- a/tools/Makefile
 +++ b/tools/Makefile
-@@ -20,7 +20,7 @@ SUBDIRS-y += console
+@@ -20,6 +20,7 @@ SUBDIRS-y += console
+ SUBDIRS-y += console
  SUBDIRS-y += xenmon
  SUBDIRS-y += xenstat
- SUBDIRS-$(CONFIG_Linux) += memshr 
--SUBDIRS-$(CONFIG_BLKTAP2) += blktap2
-+SUBDIRS-$(CONFIG_BLKTAP2) += blktap3
++SUBDIRS-y += blktap3
  SUBDIRS-$(CONFIG_NetBSD) += xenbackendd
  SUBDIRS-y += libfsimage
  SUBDIRS-$(CONFIG_Linux) += libvchan
-diff --git a/tools/Rules.mk b/tools/Rules.mk
-index 679dd17503..d94277e009 100644
 --- a/tools/Rules.mk
 +++ b/tools/Rules.mk
-@@ -25,7 +25,7 @@ XEN_XENLIGHT       = $(XEN_ROOT)/tools/libxl
+@@ -25,6 +25,7 @@ XEN_XENLIGHT       = $(XEN_ROOT)/tools/libxl
  XEN_XLUTIL         = $(XEN_XENLIGHT)
  XEN_XENSTORE       = $(XEN_ROOT)/tools/xenstore
  XEN_LIBXENSTAT     = $(XEN_ROOT)/tools/xenstat/libxenstat/src
--XEN_BLKTAP2        = $(XEN_ROOT)/tools/blktap2
-+XEN_BLKTAP2        = $(XEN_ROOT)/tools/blktap3
++XEN_BLKTAP3        = $(XEN_ROOT)/tools/blktap3
  XEN_LIBVCHAN       = $(XEN_ROOT)/tools/libvchan
  
  CFLAGS_xeninclude = -I$(XEN_INCLUDE)
-@@ -187,7 +187,7 @@ SHLIB_libblktapctl  =
- PKG_CONFIG_REMOVE += xenblktapctl
+@@ -187,8 +188,13 @@ SHLIB_libblktapctl  =
+ CFLAGS += -O2 -fomit-frame-pointer
  endif
- 
+
 -CFLAGS_libxenlight = -I$(XEN_XENLIGHT) $(CFLAGS_libxenctrl) $(CFLAGS_xeninclude)
+-SHDEPS_libxenlight = $(SHLIB_libxenctrl) $(SHLIB_libxenstore) $(SHLIB_libxenhypfs)
++CFLAGS_libblktapctl = -I$(XEN_BLKTAP3)/control -I$(XEN_BLKTAP3)/include $(CFLAGS_xeninclude)
++SHDEPS_libblktapctl = $(SHDEPS_libxentoolcore)
++LDLIBS_libblktapctl = $(SHDEPS_libblktapctl) $(XEN_BLKTAP3)/control/.libs/libblktapctl$(libextension)
++SHLIB_libblktapctl  = $(SHDEPS_libblktapctl) -Wl,-rpath-link=$(XEN_BLKTAP3)/control/.libs
++
 +CFLAGS_libxenlight = -I$(XEN_XENLIGHT) $(CFLAGS_libxenctrl) $(CFLAGS_libblktapctl) $(CFLAGS_xeninclude)
- SHDEPS_libxenlight = $(SHLIB_libxenctrl) $(SHLIB_libxenstore) $(SHLIB_libblktapctl)
++SHDEPS_libxenlight = $(SHLIB_libxenctrl) $(SHLIB_libxenstore) $(SHLIB_libblktapctl) $(SHLIB_libxenhypfs) $(SHLIB_libxentoolcore)
  LDLIBS_libxenlight ?= $(SHDEPS_libxenlight) $(XEN_XENLIGHT)/libxenlight$(libextension)
  SHLIB_libxenlight  = $(SHDEPS_libxenlight) -Wl,-rpath-link=$(XEN_XENLIGHT)
+
+--- a/tools/libxl/Makefile	2020-11-24 15:46:34.058682616 +0000
++++ b/tools/libxl/Makefile	2020-11-24 15:52:53.802167651 +0000
+@@ -20,7 +20,7 @@
+ endif
+ 
+ LIBXL_LIBS =
+-LIBXL_LIBS = $(LDLIBS_libxentoollog) $(LDLIBS_libxenevtchn) $(LDLIBS_libxenctrl) $(LDLIBS_libxenguest) $(LDLIBS_libxenhypfs) $(LDLIBS_libxenstore) $(LDLIBS_libxentoolcore) $(PTYFUNCS_LIBS) $(LIBUUID_LIBS)
++LIBXL_LIBS = $(LDLIBS_libxentoollog) $(LDLIBS_libxenevtchn) $(LDLIBS_libxenctrl) $(LDLIBS_libxenguest) $(LDLIBS_libxenhypfs) $(LDLIBS_libxenstore) $(LDLIBS_libblktapctl) $(LDLIBS_libxentoolcore) $(PTYFUNCS_LIBS) $(LIBUUID_LIBS)
+ ifeq ($(CONFIG_LIBNL),y)
+ LIBXL_LIBS += $(LIBNL3_LIBS)
+ endif
+@@ -35,6 +35,7 @@
+ CFLAGS_LIBXL += $(CFLAGS_libxenguest)
+ CFLAGS_LIBXL += $(CFLAGS_libxenhypfs)
+ CFLAGS_LIBXL += $(CFLAGS_libxenstore)
++CFLAGS_LIBXL += $(CFLAGS_libblktapctl)
+ ifeq ($(CONFIG_LIBNL),y)
+ CFLAGS_LIBXL += $(LIBNL3_CFLAGS)
+ endif

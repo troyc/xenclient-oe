@@ -58,6 +58,6 @@ PATCHES
 -                             "qemu-xen doesn't support read-only IDE disk drivers");
 -                        return ERROR_INVAL;
 -                    }
-                     if (b_info->stubdomain_version == LIBXL_STUBDOMAIN_VERSION_LINUX) {
-                         target_path = (char *[]) {"/dev/xvda",
-                                                   "/dev/xvdb",
+                     if (colo_mode == LIBXL__COLO_SECONDARY) {
+                         drive = libxl__sprintf
+                             (gc, "if=none,driver=%s,file=%s,id=%s",

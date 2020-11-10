@@ -41,9 +41,9 @@ PATCHES
                               LIBXL_EXTERNAL_CALLERS_ONLY;
  
 +int libxl_hard_shutdown(libxl_ctx *ctx, uint32_t domid);
- int libxl_domain_shutdown(libxl_ctx *ctx, uint32_t domid);
- int libxl_domain_reboot(libxl_ctx *ctx, uint32_t domid);
- int libxl_domain_sleep(libxl_ctx *ctx, uint32_t domid);
+ int libxl_domain_shutdown(libxl_ctx *ctx, uint32_t domid,
+                           const libxl_asyncop_how *ao_how)
+                           LIBXL_EXTERNAL_CALLERS_ONLY;
 --- a/tools/libxl/libxl_create.c
 +++ b/tools/libxl/libxl_create.c
 @@ -750,6 +750,11 @@ retry_transaction:
@@ -58,7 +58,7 @@ PATCHES
      xs_write(ctx->xsh, t, GCSPRINTF("%s/control/platform-feature-multiprocessor-suspend", dom_path), "1", 1);
      xs_write(ctx->xsh, t, GCSPRINTF("%s/control/platform-feature-xs_reset_watches", dom_path), "1", 1);
  
-@@ -1435,17 +1440,12 @@ static void domcreate_launch_dm(libxl__e
+@@ -1435,17 +1440,10 @@ static void domcreate_launch_dm(libxl__e
      {
          libxl__device_console console;
          libxl__device device;
@@ -69,9 +69,11 @@ PATCHES
          libxl__device_console_add(gc, domid, &console, state, &device);
          libxl__device_console_dispose(&console);
  
--        libxl_device_vkb_init(&vkb);
--        libxl__device_add(gc, domid, &libxl__vkb_devtype, &vkb);
--        libxl_device_vkb_dispose(&vkb);
+-        if (libxl_defbool_val(d_config->b_info.u.hvm.vkb_device)) {
+-            libxl_device_vkb_init(&vkb);
+-            libxl__device_add(gc, domid, &libxl__vkb_devtype, &vkb);
+-            libxl_device_vkb_dispose(&vkb);
+-        }
 -
          dcs->sdss.dm.guest_domid = domid;
          if (libxl_defbool_val(d_config->b_info.device_model_stubdomain))
@@ -136,9 +138,9 @@ PATCHES
 --- a/tools/libxl/libxl_domain.c
 +++ b/tools/libxl/libxl_domain.c
 @@ -703,6 +703,13 @@ static int libxl__domain_pvcontrol(libxl
-     return libxl__domain_pvcontrol_write(gc, XBT_NULL, domid, cmd);
- }
- 
+ static void pvcontrol_cb(libxl__egc *egc, libxl__xswait_state *xswa, int rc,
+                          const char *state);
+
 +int libxl_hard_shutdown(libxl_ctx *ctx, uint32_t domid)
 +{
 +    int ret;
@@ -146,9 +148,9 @@ PATCHES
 +    return ret;
 +}
 +
- int libxl_domain_shutdown(libxl_ctx *ctx, uint32_t domid)
+ int libxl_domain_shutdown(libxl_ctx *ctx, uint32_t domid,
+                           const libxl_asyncop_how *ao_how)
  {
-     GC_INIT(ctx);
 @@ -972,6 +979,8 @@ void libxl__domain_destroy(libxl__egc *e
          dds->stubdom.domid = stubdomid;
          dds->stubdom.callback = stubdom_destroy_callback;
@@ -170,9 +172,9 @@ PATCHES
 --- a/tools/libxl/libxl_internal.h
 +++ b/tools/libxl/libxl_internal.h
 @@ -1976,6 +1976,10 @@ _hidden int libxl__qmp_pci_del(libxl__gc
-                                libxl_device_pci *pcidev);
- /* Resume hvm domain */
- _hidden int libxl__qmp_system_wakeup(libxl__gc *gc, int domid);
+  */
+ _hidden libxl__qmp_handler *libxl__qmp_initialize(libxl__gc *gc,
+                                                   uint32_t domid);
 +/* Exit QEMU */
 +_hidden int libxl__qmp_quit(libxl__gc *gc, int domid);
 +/* Suspend QEMU. */

@@ -43,7 +43,7 @@ PATCHES
 +     * OpenXT: XenMgr synchronizes with this state change to apply the argo
 +     * firewall rules and requires it to occur after libxl__domain_make(..).
 +     */
-+    libxl_update_state(ctx, domid, "creating-devices");
++    libxl_update_state(CTX, domid, "creating-devices");
 +
 +    /*
       * Set the dm version quite early so that libxl doesn't have to pass the
@@ -71,15 +71,15 @@ PATCHES
          LOGD(DEBUG, domid, "issuing %s suspend request via event channel",
              dsps->type != LIBXL_DOMAIN_TYPE_PV ? "PVH/HVM" : "PV");
 @@ -203,6 +208,9 @@ static void domain_suspend_callback_comm
-     dsps->pvcontrol.timeout_ms = 60 * 1000;
+
+     dsps->pvcontrol.ao = ao;
      dsps->pvcontrol.callback = domain_suspend_common_pvcontrol_suspending;
-     libxl__xswait_start(gc, &dsps->pvcontrol);
 +
 +    libxl_update_state(CTX, domid, "suspended");
 +
-     return;
- 
-  err:
+     rc = libxl__domain_pvcontrol(egc, &dsps->pvcontrol, domid, "suspend");
+     if (rc) goto err;
+
 --- a/tools/libxl/libxl_domain.c
 +++ b/tools/libxl/libxl_domain.c
 @@ -498,6 +498,8 @@ int libxl_domain_suspend(libxl_ctx *ctx,
@@ -101,16 +101,16 @@ PATCHES
      GC_FREE;
      return 0;
  }
-@@ -614,6 +619,9 @@ int libxl_domain_unpause(libxl_ctx *ctx,
-         }
+@@ -690,6 +690,9 @@ int libxl_domain_unpause(libxl_ctx *ctx,
+         goto out;
      }
-     ret = xc_domain_unpause(ctx->xch, domid);
+     rc = 0;
 +
-+    libxl_update_state(ctx, domid, "running");
++    libxl_update_state(CTX, domid, "running");
 +
-     if (ret<0) {
-         LOGED(ERROR, domid, "Unpausing domain");
-         rc = ERROR_FAIL;
+ out:
+     dmrs->callback(egc, dmrs, rc);
+ }
 --- a/tools/libxl/libxl_utils.c
 +++ b/tools/libxl/libxl_utils.c
 @@ -1209,6 +1209,62 @@ int libxl_domid_valid_guest(uint32_t dom
@@ -222,7 +222,7 @@ PATCHES
  
      fprintf(stderr, "Rebooting domain %u\n", domid);
 +    libxl_update_state(ctx, domid, "rebooting");
-     rc=libxl_domain_reboot(ctx, domid);
+     rc = libxl_domain_reboot(ctx, domid, NULL);
      if (rc == ERROR_NOPARAVIRT) {
          if (fallback_trigger) {
 @@ -136,6 +148,7 @@ static void shutdown_domain(uint32_t dom
@@ -230,7 +230,7 @@ PATCHES
  
      fprintf(stderr, "Shutting down domain %u\n", domid);
 +    libxl_update_state(ctx, domid, "shutdowning");
-     rc=libxl_domain_shutdown(ctx, domid);
+     rc = libxl_domain_shutdown(ctx, domid, NULL);
      if (rc == ERROR_NOPARAVIRT) {
          if (fallback_trigger) {
 @@ -403,9 +416,11 @@ static domain_restart_type handle_domain

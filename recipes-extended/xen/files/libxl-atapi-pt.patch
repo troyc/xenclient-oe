@@ -73,9 +73,9 @@ PATCHES
 --- a/tools/libxl/libxl_dm.c
 +++ b/tools/libxl/libxl_dm.c
 @@ -1835,13 +1835,21 @@ static int libxl__build_device_model_arg
-             }
- 
-             if (disks[i].is_cdrom) {
+                          disks[i].vdev);
+                     continue;
+                 }
 -                drive = libxl__sprintf(gc,
 -                         "if=ide,index=%d,readonly=on,media=cdrom,id=ide-%i",
 -                         disk, dev_number);

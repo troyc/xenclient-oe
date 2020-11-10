@@ -37,8 +37,10 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  xen/include/xen/libelf.h          |   1 +
  9 files changed, 753 insertions(+), 27 deletions(-)
 
---- a/docs/misc/efi.pandoc
-+++ b/docs/misc/efi.pandoc
+Index: git/docs/misc/efi.pandoc
+===================================================================
+--- git.orig/docs/misc/efi.pandoc
++++ git/docs/misc/efi.pandoc
 @@ -112,6 +112,20 @@ Specifies an alternate configuration fil
  specified) configuration file. This is only meaningful in the [global] section
  and really not meant to be used together with the `-cfg=` command line option.
@@ -60,8 +62,10 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  Filenames must be specified relative to the location of the EFI binary.
  
  Extra options to be passed to Xen can also be specified on the command line,
---- a/xen/arch/arm/efi/efi-boot.h
-+++ b/xen/arch/arm/efi/efi-boot.h
+Index: git/xen/arch/arm/efi/efi-boot.h
+===================================================================
+--- git.orig/xen/arch/arm/efi/efi-boot.h
++++ git/xen/arch/arm/efi/efi-boot.h
 @@ -395,7 +395,8 @@ static void __init efi_arch_cfg_file_ear
          blexit(L"Unable to create new FDT");
  }
@@ -89,11 +93,13 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  static void __init efi_arch_handle_cmdline(CHAR16 *image_name,
                                             CHAR16 *cmdline_options,
                                             char *cfgfile_options)
---- a/xen/arch/x86/efi/efi-boot.h
-+++ b/xen/arch/x86/efi/efi-boot.h
+Index: git/xen/arch/x86/efi/efi-boot.h
+===================================================================
+--- git.orig/xen/arch/x86/efi/efi-boot.h
++++ git/xen/arch/x86/efi/efi-boot.h
 @@ -9,16 +9,43 @@
+ #include <asm/microcode.h>
  #include <asm/msr.h>
- #include <asm/processor.h>
  #include <asm/setup.h>
 +#include <xen/libelf.h>
 +#include <xen/multiboot2.h>
@@ -384,7 +390,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +        "cli\n"
 +
 +        // We need to use Xen's GDT to switch back to 32-bit mode
-+        "lgdt   gdt_descr(%%rip)\n"
++        "lgdt   boot_gdtr(%%rip)\n"
 +
 +        // this push and call are consumed by lretq, producing a mov-to-cs
 +        "pushq  %[cs]\n"
@@ -429,19 +435,18 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
      /* Set system registers and transfer control. */
      asm volatile("pushq $0\n\tpopfq");
-@@ -263,22 +559,35 @@ static void __init noreturn efi_arch_pos
-                    "lretq  %[stkoff]-16"
+@@ -264,21 +560,34 @@ static void __init noreturn efi_arch_pos
+                    "lretq"
                     : [rip] "=&r" (efer/* any dead 64-bit variable */),
                       [cr4] "+&r" (cr4)
 -                   : [cr3] "r" (idle_pg_table),
 +                   : [cr3] "r" (cr3),
-                      [cs] "ir" (__HYPERVISOR_CS),
+                      [cs] "i" (__HYPERVISOR_CS),
                       [ds] "r" (__HYPERVISOR_DS),
-                      [stkoff] "i" (STACK_SIZE - sizeof(struct cpu_info)),
 -                     "D" (&mbi)
 +                     "D" (mbi_p)
                     : "memory" );
-     for( ; ; ); /* not reached */
+     unreachable();
  }
  
 +static void __init noreturn efi_arch_post_exit_boot(void)
@@ -592,7 +597,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      /* Allocate space for trampoline (in first Mb). */
      cfg.addr = 0x100000;
  
-@@ -714,6 +1133,146 @@ void __init efi_multiboot2(EFI_HANDLE Im
+@@ -751,6 +1170,153 @@ void __init efi_multiboot2(EFI_HANDLE Im
      efi_exit_boot(ImageHandle, SystemTable);
  }
  
@@ -612,23 +617,30 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +        *ptr += xen_phys_start;
 +    }
 +
-+    /* The above loop also adjusted l2_identmap, but that mostly contains a 1:1
++    /* The above loop also adjusted l2_directmap, but that mostly contains a 1:1
 +     * mapping that should not have been relocated.  The first entry of that
 +     * table is already correct; re-generate the rest now.
 +     */
-+    for ( i = 1; i < 8; i++ )
++#define l2_4G_offset(a) \
++    (((UINTN)(a) >> L2_PAGETABLE_SHIFT) & (4 * L2_PAGETABLE_ENTRIES - 1))
++    for ( i = l2_4G_offset(_start);
++          i <= l2_4G_offset(_end - 1); ++i )
 +    {
-+        paddr_t addr = i << L2_PAGETABLE_SHIFT;
-+        l2_identmap[i] = l2e_from_paddr(addr, PAGE_HYPERVISOR|_PAGE_PSE);
++        l2_pgentry_t pte = l2e_from_paddr(i << L2_PAGETABLE_SHIFT,
++			                  __PAGE_HYPERVISOR | _PAGE_PSE);
++	l2e_add_flags(pte, PAGE_HYPERVISOR);
++	l2_directmap[i] = pte;
 +    }
 +
-+    /* Map 16MB starting at xen_phys_start, as expected by __start_xen */
-+    for ( i = 0; i < 8; i++ )
++    for ( i = l2_4G_offset(_start);
++          i <= l2_4G_offset(_end - 1); ++i )
 +    {
-+        paddr_t addr = (i << L2_PAGETABLE_SHIFT) + xen_phys_start;
-+        unsigned int slot = addr >> L2_PAGETABLE_SHIFT;
-+        l2_identmap[slot] = l2e_from_paddr(addr, PAGE_HYPERVISOR|_PAGE_PSE);
++        l2_pgentry_t pte = l2e_from_paddr((i << L2_PAGETABLE_SHIFT) + xen_phys_start,
++			                  __PAGE_HYPERVISOR | _PAGE_PSE);
++	l2e_add_flags(pte, PAGE_HYPERVISOR);
++	l2_directmap[i] = pte;
 +    }
++
 +}
 +
 +static void __init relocate_trampoline_e820(void)
@@ -739,9 +751,11 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  /*
   * Local variables:
   * mode: C
---- a/xen/arch/x86/efi/stub.c
-+++ b/xen/arch/x86/efi/stub.c
-@@ -50,6 +50,11 @@ bool efi_enabled(unsigned int feature)
+Index: git/xen/arch/x86/efi/stub.c
+===================================================================
+--- git.orig/xen/arch/x86/efi/stub.c
++++ git/xen/arch/x86/efi/stub.c
+@@ -52,6 +52,11 @@ bool efi_enabled(unsigned int feature)
  
  void __init efi_init_memory(void) { }
  
@@ -753,9 +767,11 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  void efi_update_l4_pgtable(unsigned int l4idx, l4_pgentry_t l4e) { }
  
  bool efi_rs_using_pgtables(void)
---- a/xen/arch/x86/tboot.c
-+++ b/xen/arch/x86/tboot.c
-@@ -7,6 +7,7 @@
+Index: git/xen/arch/x86/tboot.c
+===================================================================
+--- git.orig/xen/arch/x86/tboot.c
++++ git/xen/arch/x86/tboot.c
+@@ -8,6 +8,7 @@
  #include <xen/iommu.h>
  #include <xen/acpi.h>
  #include <xen/pfn.h>
@@ -763,7 +779,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  #include <asm/fixmap.h>
  #include <asm/page.h>
  #include <asm/processor.h>
-@@ -73,6 +74,19 @@ typedef struct __packed {
+@@ -74,6 +75,19 @@ typedef struct __packed {
      uint32_t     vtd_dmars_off;
  } sinit_mle_data_t;
  
@@ -783,7 +799,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  static void __init tboot_copy_memory(unsigned char *va, uint32_t size,
                                       unsigned long pa)
  {
-@@ -92,6 +106,77 @@ static void __init tboot_copy_memory(uns
+@@ -93,6 +107,77 @@ static void __init tboot_copy_memory(uns
      }
  }
  
@@ -861,7 +877,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  void __init tboot_probe(void)
  {
      tboot_shared_t *tboot_shared;
-@@ -144,6 +229,9 @@ void __init tboot_probe(void)
+@@ -145,6 +230,9 @@ void __init tboot_probe(void)
                        TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_BASE);
      tboot_copy_memory((unsigned char *)&sinit_size, sizeof(sinit_size),
                        TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_SIZE);
@@ -871,7 +887,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      clear_fixmap(FIX_TBOOT_MAP_ADDRESS);
  }
  
-@@ -454,7 +542,6 @@ int __init tboot_protect_mem_regions(voi
+@@ -452,7 +540,6 @@ int __init tboot_protect_mem_regions(voi
  int __init tboot_parse_dmar_table(acpi_table_handler dmar_handler)
  {
      int rc;
@@ -879,7 +895,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      uint32_t dmar_table_length;
      unsigned long pa;
      sinit_mle_data_t sinit_mle_data;
-@@ -469,21 +556,8 @@ int __init tboot_parse_dmar_table(acpi_t
+@@ -467,21 +554,8 @@ int __init tboot_parse_dmar_table(acpi_t
      if ( txt_heap_base == 0 )
          return 1;
  
@@ -903,9 +919,11 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      /* get addr of DMAR table */
      pa += sinit_mle_data.vtd_dmars_off - sizeof(uint64_t);
      tboot_copy_memory((unsigned char *)&dmar_table_length,
---- a/xen/common/efi/boot.c
-+++ b/xen/common/efi/boot.c
-@@ -630,7 +630,7 @@ static bool __init read_file(EFI_FILE_HA
+Index: git/xen/common/efi/boot.c
+===================================================================
+--- git.orig/xen/common/efi/boot.c
++++ git/xen/common/efi/boot.c
+@@ -628,7 +628,7 @@ static bool __init read_file(EFI_FILE_HA
          what = what ?: L"Seek";
      else
      {
@@ -914,7 +932,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
                           HYPERVISOR_VIRT_END - DIRECTMAP_VIRT_START);
          ret = efi_bs->AllocatePages(AllocateMaxAddress, EfiLoaderData,
                                      PFN_UP(size), &file->addr);
-@@ -742,6 +742,7 @@ static char *__init get_value(const stru
+@@ -740,6 +740,7 @@ static char *__init get_value(const stru
  
  static void __init efi_init(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
  {
@@ -922,7 +940,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      efi_ih = ImageHandle;
      efi_bs = SystemTable->BootServices;
      efi_bs_revision = efi_bs->Hdr.Revision;
-@@ -1148,6 +1149,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1170,6 +1171,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
      __set_bit(EFI_RS, &efi_flags);
  #endif
  
@@ -931,7 +949,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      efi_init(ImageHandle, SystemTable);
  
      use_cfg_file = efi_arch_use_config_file(SystemTable);
-@@ -1238,6 +1241,13 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1260,6 +1263,13 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
          /* Get the file system interface. */
          dir_handle = get_parent_handle(loaded_image, &file_name);
  
@@ -945,7 +963,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
          /* Read and parse the config file. */
          if ( !cfg_file_name )
          {
-@@ -1382,7 +1392,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1404,7 +1414,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
              }
          }
  
@@ -954,8 +972,10 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
          efi_bs->FreePages(cfg.addr, PFN_UP(cfg.size));
          cfg.addr = 0;
---- a/xen/common/libelf/libelf-loader.c
-+++ b/xen/common/libelf/libelf-loader.c
+Index: git/xen/common/libelf/libelf-loader.c
+===================================================================
+--- git.orig/xen/common/libelf/libelf-loader.c
++++ git/xen/common/libelf/libelf-loader.c
 @@ -184,6 +184,13 @@ static elf_errorstatus elf_load_image(st
          return -1;
      return 0;
@@ -1030,8 +1050,10 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  elf_ptrval elf_get_ptr(struct elf_binary *elf, unsigned long addr)
  {
      return ELF_REALPTR2PTRVAL(elf->dest_base) + addr - elf->pstart;
---- a/xen/include/xen/efi.h
-+++ b/xen/include/xen/efi.h
+Index: git/xen/include/xen/efi.h
+===================================================================
+--- git.orig/xen/include/xen/efi.h
++++ git/xen/include/xen/efi.h
 @@ -19,6 +19,7 @@ struct efi {
      unsigned long acpi20;       /* ACPI table (ACPI 2.0) */
      unsigned long smbios;       /* SM BIOS table */
@@ -1048,8 +1070,10 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
  #endif /* !__ASSEMBLY__ */
  
---- a/xen/include/xen/libelf.h
-+++ b/xen/include/xen/libelf.h
+Index: git/xen/include/xen/libelf.h
+===================================================================
+--- git.orig/xen/include/xen/libelf.h
++++ git/xen/include/xen/libelf.h
 @@ -364,6 +364,7 @@ void elf_set_log(struct elf_binary *elf,
  
  void elf_parse_binary(struct elf_binary *elf);
@@ -1058,8 +1082,10 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
  elf_ptrval elf_get_ptr(struct elf_binary *elf, unsigned long addr);
  uint64_t elf_lookup_addr(struct elf_binary *elf, const char *symbol);
---- a/xen/common/efi/runtime.c
-+++ b/xen/common/efi/runtime.c
+Index: git/xen/common/efi/runtime.c
+===================================================================
+--- git.orig/xen/common/efi/runtime.c
++++ git/xen/common/efi/runtime.c
 @@ -68,6 +68,7 @@ struct efi __read_mostly efi = {
  	.mps    = EFI_INVALID_TABLE_ADDR,
  	.smbios = EFI_INVALID_TABLE_ADDR,

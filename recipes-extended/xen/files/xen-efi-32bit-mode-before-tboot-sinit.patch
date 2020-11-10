@@ -1,0 +1,115 @@
+commit c492ec914dcd5ca5327cf005810adc8e130d8b07
+Author: Chris Rogers <rogersc@ainfosec.com>
+Date:   Wed Dec 2 21:10:17 2020 +0000
+
+    Revert "x86/desc: Drop __HYPERVISOR_CS32"
+    
+    This reverts commit b6b5608b6027fd62ce565ecd72a3422c1223beaf.
+
+diff --git a/xen/arch/x86/acpi/wakeup_prot.S b/xen/arch/x86/acpi/wakeup_prot.S
+index 15052c300f..a5f6765940 100644
+--- a/xen/arch/x86/acpi/wakeup_prot.S
++++ b/xen/arch/x86/acpi/wakeup_prot.S
+@@ -58,7 +58,7 @@ ENTRY(s3_resume)
+         mov     saved_rsp(%rip), %rsp
+ 
+         /* Reload code selector */
+-        pushq   $__HYPERVISOR_CS
++        pushq   $(__HYPERVISOR_CS64)
+         leaq    1f(%rip),%rax
+         pushq   %rax
+         lretq
+diff --git a/xen/arch/x86/boot/x86_64.S b/xen/arch/x86/boot/x86_64.S
+index d61048c583..1add877260 100644
+--- a/xen/arch/x86/boot/x86_64.S
++++ b/xen/arch/x86/boot/x86_64.S
+@@ -22,7 +22,7 @@ ENTRY(__high_start)
+         popf
+ 
+         /* Reload code selector. */
+-        pushq   $__HYPERVISOR_CS
++        pushq   $(__HYPERVISOR_CS64)
+         leaq    1f(%rip),%rax
+         pushq   %rax
+         lretq
+diff --git a/xen/arch/x86/desc.c b/xen/arch/x86/desc.c
+index 39080ca672..9439e41d15 100644
+--- a/xen/arch/x86/desc.c
++++ b/xen/arch/x86/desc.c
+@@ -31,7 +31,7 @@ __section(".data.page_aligned") __aligned(PAGE_SIZE)
+ seg_desc_t boot_gdt[PAGE_SIZE / sizeof(seg_desc_t)] =
+ {
+     /* 0xe008 - Ring 0 code, 64bit mode */
+-    [SEL2GDT(__HYPERVISOR_CS)] =      { 0x00af9b000000ffff },
++    [SEL2GDT(__HYPERVISOR_CS64)] =    { 0x00af9b000000ffff },
+ 
+     /* 0xe010 - Ring 0 data */
+     [SEL2GDT(__HYPERVISOR_DS32)] =    { 0x00cf93000000ffff },
+@@ -47,7 +47,9 @@ seg_desc_t boot_gdt[PAGE_SIZE / sizeof(seg_desc_t)] =
+     /* 0xe033 - Ring 3 code, 64-bit mode */
+     [SEL2GDT(FLAT_RING3_CS64)] =      { 0x00affb000000ffff },
+ 
+-    /* 0xe038 - reserved */
++    /* 0xe038 - Ring 0 code, compatibility */
++    [SEL2GDT(__HYPERVISOR_CS32)] =    { 0x00cf9b000000ffff },
++
+     /* 0xe040 - TSS */
+     /* 0xe050 - LDT */
+ 
+@@ -60,7 +62,7 @@ __section(".data.page_aligned") __aligned(PAGE_SIZE)
+ seg_desc_t boot_compat_gdt[PAGE_SIZE / sizeof(seg_desc_t)] =
+ {
+     /* 0xe008 - Ring 0 code, 64bit mode */
+-    [SEL2GDT(__HYPERVISOR_CS)] =      { 0x00af9b000000ffff },
++    [SEL2GDT(__HYPERVISOR_CS64)] =    { 0x00af9b000000ffff },
+ 
+     /* 0xe010 - Ring 0 data */
+     [SEL2GDT(__HYPERVISOR_DS32)] =    { 0x00cf93000000ffff },
+@@ -77,7 +79,9 @@ seg_desc_t boot_compat_gdt[PAGE_SIZE / sizeof(seg_desc_t)] =
+     /* 0xe033 - Ring 3 data */
+     [SEL2GDT(FLAT_COMPAT_RING3_DS)] = { 0x00cff3000000ffff },
+ 
+-    /* 0xe038 - reserved */
++    /* 0xe038 - Ring 0 code, compatibility */
++    [SEL2GDT(__HYPERVISOR_CS32)] =    { 0x00cf9b000000ffff },
++
+     /* 0xe040 - TSS */
+     /* 0xe050 - LDT */
+ 
+diff --git a/xen/include/asm-x86/config.h b/xen/include/asm-x86/config.h
+index 665e9cc31d..cde1624ea6 100644
+--- a/xen/include/asm-x86/config.h
++++ b/xen/include/asm-x86/config.h
+@@ -266,7 +266,9 @@ extern unsigned char boot_edid_info[128];
+ 
+ #endif
+ 
+-#define __HYPERVISOR_CS   0xe008
++#define __HYPERVISOR_CS64 0xe008
++#define __HYPERVISOR_CS32 0xe038
++#define __HYPERVISOR_CS   __HYPERVISOR_CS64
+ #define __HYPERVISOR_DS64 0x0000
+ #define __HYPERVISOR_DS32 0xe010
+ #define __HYPERVISOR_DS   __HYPERVISOR_DS64
+diff --git a/xen/include/asm-x86/desc.h b/xen/include/asm-x86/desc.h
+index 24db3e9510..a60d0375c0 100644
+--- a/xen/include/asm-x86/desc.h
++++ b/xen/include/asm-x86/desc.h
+@@ -155,7 +155,7 @@ do {                                                     \
+         ((unsigned long)(dpl) << 45) |                   \
+         ((unsigned long)(type) << 40) |                  \
+         ((unsigned long)(addr) & 0xFFFFUL) |             \
+-        ((unsigned long)__HYPERVISOR_CS << 16) |         \
++        ((unsigned long)__HYPERVISOR_CS64 << 16) |       \
+         (1UL << 47);                                     \
+ } while (0)
+ 
+@@ -169,7 +169,7 @@ static inline void _set_gate_lower(idt_entry_t *gate, unsigned long type,
+         ((unsigned long)(dpl) << 45) |
+         ((unsigned long)(type) << 40) |
+         ((unsigned long)(addr) & 0xFFFFUL) |
+-        ((unsigned long)__HYPERVISOR_CS << 16) |
++        ((unsigned long)__HYPERVISOR_CS64 << 16) |
+         (1UL << 47);
+     _write_gate_lower(gate, &idte);
+ }

@@ -26,9 +26,25 @@ Could be upstreamed
 ################################################################################
 PATCHES
 ################################################################################
+--- a/tools/libxl/libxl_internal.h
++++ b/tools/libxl/libxl_internal.h
+@@ -2080,6 +2080,13 @@ _hidden char *libxl__object_to_json(libx
+ _hidden void libxl__cpuid_legacy(libxl_ctx *ctx, uint32_t domid, bool retore,
+                                  libxl_domain_build_info *info);
+ 
++_hidden char *libxl__blktap_devpath(libxl__gc *gc,
++		                    const char *disk,
++				    libxl_disk_format format,
++				    char *keydir);
++
++_hidden int libxl__device_destroy_tapdisk(libxl__gc *gc, const char *params);
++
+ /* Calls poll() again - useful to check whether a signaled condition
+  * is still true.  Cannot fail.  Returns currently-true revents. */
+ _hidden short libxl__fd_poll_recheck(libxl__egc *egc, int fd, short events);
 --- /dev/null
 +++ b/tools/libxl/libxl_blktap3.c
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,137 @@
 +/*
 + * Copyright (C) 2012      Advanced Micro Devices
 + * Author Christoph Egger <Christoph.Egger@amd.com>
@@ -86,16 +102,8 @@ PATCHES
 +    return ret;
 +}
 +
-+/**
-+ * blktap3 doesn't require blkback, so it's always available.
-+ */
-+int libxl__blktap_enabled(libxl__gc *gc)
-+{
-+    return 1;
-+}
-+
 +char *libxl__blktap_devpath(libxl__gc *gc, const char *disk,
-+		libxl_disk_format format)
++		libxl_disk_format format, char *keydir)
 +{
 +    const char *type = NULL;
 +    char *params, *devname = NULL;
@@ -116,6 +124,11 @@ PATCHES
 +    LOG(DEBUG, "tapdisk not found\n");
 +
 +	/* TODO Should we worry about return codes other than ENOENT? */
++
++    if (!keydir || !strncmp(keydir, "", 1))
++        setenv("TAPDISK3_CRYPTO_KEYDIR", "/config/platform-crypto-keys", 1);
++    else
++        setenv("TAPDISK3_CRYPTO_KEYDIR", keydir, 1);
 +
 +    params = libxl__sprintf(gc, "%s:%s", type, disk);
 +
@@ -171,7 +184,7 @@ PATCHES
 + */
 --- a/tools/libxl/libxl_device.c
 +++ b/tools/libxl/libxl_device.c
-@@ -973,7 +973,9 @@ void libxl__initiate_device_generic_remo
+@@ -946,7 +946,9 @@ void libxl__initiate_device_generic_remo
      STATE_AO_GC(aodev->ao);
      xs_transaction_t t = 0;
      char *be_path = libxl__device_backend_path(gc, aodev->dev);
@@ -181,7 +194,7 @@ PATCHES
      char *online_path = GCSPRINTF("%s/online", be_path);
      const char *state;
      libxl_dominfo info;
-@@ -1050,6 +1052,11 @@ void libxl__initiate_device_generic_remo
+@@ -1023,6 +1025,11 @@ void libxl__initiate_device_generic_remo
                  LOGD(ERROR, domid, "unable to write to xenstore path %s", state_path);
                  goto out;
              }
@@ -213,28 +226,15 @@ PATCHES
              break;
          case LIBXL_DISK_BACKEND_QDISK:
              device->backend_kind = LIBXL__DEVICE_KIND_QDISK;
-@@ -310,7 +310,6 @@ static void device_disk_add(libxl__egc *
-             case LIBXL_DISK_BACKEND_PHY:
-                 dev = disk->pdev_path;
- 
--        do_backend_phy:
-                 flexarray_append(back, "params");
-                 flexarray_append(back, dev);
- 
-@@ -322,27 +321,29 @@ static void device_disk_add(libxl__egc *
+@@ -321,9 +321,28 @@ static void device_disk_add(libxl__egc *
                  break;
  
              case LIBXL_DISK_BACKEND_TAP:
--                if (dev == NULL) {
--                    dev = libxl__blktap_devpath(gc, disk->pdev_path,
--                                                disk->format);
--                    if (!dev) {
--                        LOGD(ERROR, domid, "Failed to get blktap devpath for %p",
--                             disk->pdev_path);
--                        rc = ERROR_FAIL;
--                        goto out;
+-                LOG(ERROR, "blktap is not supported");
+-                rc = ERROR_FAIL;
+-                goto out;
 +                dev = libxl__blktap_devpath(gc, disk->pdev_path,
-+                                            disk->format);
++                                            disk->format, disk->crypto_key_dir);
 +                if (!dev) {
 +                     LOGD(ERROR, domid, "failed to get blktap devpath for %s: %s\n",
 +                          disk->pdev_path, strerror(rc));
@@ -248,24 +248,17 @@ PATCHES
 +                        LOG(DEBUG, "\nBLKTAP3_DEBUG: major:minor = %x:%x\n",major,minor);
 +                        flexarray_append_pair(back, "physical-device",
 +                                GCSPRINTF("%x:%x", major, minor));
-                     }
-                 }
-                 flexarray_append(back, "tapdisk-params");
-                 flexarray_append(back, GCSPRINTF("%s:%s",
-                     libxl__device_disk_string_of_format(disk->format),
-                     disk->pdev_path));
++                    }
++                }
++                flexarray_append(back, "tapdisk-params");
++                flexarray_append(back, GCSPRINTF("%s:%s",
++                    libxl__device_disk_string_of_format(disk->format),
++                    disk->pdev_path));
 +                break;
- 
--                /* tap backends with scripts are rejected by
--                 * libxl__device_disk_set_backend */
--                assert(!disk->script);
--
--                /* now create a phy device to export the device to the guest */
--                goto do_backend_phy;
              case LIBXL_DISK_BACKEND_QDISK:
                  flexarray_append(back, "params");
                  flexarray_append(back, GCSPRINTF("%s:%s",
-@@ -540,6 +541,16 @@ static int libxl__disk_from_xenstore(lib
+@@ -521,6 +540,16 @@ static int libxl__disk_from_xenstore(lib
      }
      libxl_string_to_backend(ctx, tmp, &(disk->backend));
  
@@ -282,35 +275,83 @@ PATCHES
      disk->vdev = xs_read(ctx->xsh, XBT_NULL,
                           GCSPRINTF("%s/dev", libxl_path), &len);
      if (!disk->vdev) {
-@@ -763,6 +774,7 @@ int libxl_cdrom_change(libxl_ctx *ctx, u
- 
-     libxl__ao_complete(egc, ao, 0);
- out:
-+    libxl_device_disk_dispose(&disk_empty);
-     if (lock) libxl__unlock_domain_userdata(lock);
-     if (rc) return AO_CREATE_FAIL(rc);
-     return AO_INPROGRESS;
 --- a/tools/libxl/Makefile
 +++ b/tools/libxl/Makefile
-@@ -48,9 +48,9 @@ LIBXLU_LIBS = $(LDLIBS_libxenlight)
+@@ -145,6 +145,8 @@ LIBXL_OBJS = flexarray.o libxl.o libxl_c
+ LIBXL_OBJS += libxl_genid.o
+ LIBXL_OBJS += _libxl_types.o libxl_flask.o _libxl_types_internal.o
  
- LIBXL_OBJS-y = osdeps.o libxl_paths.o libxl_bootloader.o flexarray.o
- ifeq ($(CONFIG_BLKTAP2),y)
--LIBXL_OBJS-y += libxl_blktap2.o
-+LIBXL_OBJS-y += libxl_blktap3.o
- else
--LIBXL_OBJS-y += libxl_noblktap2.o
-+LIBXL_OBJS-y += libxl_noblktap3.o
- endif
++LIBXL_OBJS += libxl_blktap3.o
++
+ LIBXL_TESTS += timedereg
+ LIBXL_TESTS_PROGS = $(LIBXL_TESTS) fdderegrace
+ LIBXL_TESTS_INSIDE = $(LIBXL_TESTS) fdevent
+--- a/tools/libxl/libxl_types.idl
++++ b/tools/libxl/libxl_types.idl
+@@ -517,6 +517,9 @@ libxl_domain_build_info = Struct("domain
+     ("cpuid",           libxl_cpuid_policy_list),
+     ("blkdev_start",    string),
  
- ifeq ($(CONFIG_LIBNL),y)
++    # directory containing the crypto keys for the VM's disks
++    ("crypto_key_dir", string),
++
+     ("vnuma_nodes", Array(libxl_vnode_info, "num_vnuma_nodes")),
+ 
+     ("max_grant_frames",    uint32, {'init_val': 'LIBXL_MAX_GRANT_DEFAULT'}),
+@@ -715,7 +718,8 @@ libxl_device_disk = Struct("device_disk"
+     ("colo_port", integer),
+     ("colo_export", string),
+     ("active_disk", string),
+-    ("hidden_disk", string)
++    ("hidden_disk", string),
++    ("crypto_key_dir", string)
+     ])
+ 
+ libxl_device_nic = Struct("device_nic", [
 --- a/tools/libxl/libxl_types_internal.idl
 +++ b/tools/libxl/libxl_types_internal.idl
-@@ -31,6 +31,7 @@ libxl__device_kind = Enumeration("device
-     (14, "PVCALLS"),
+@@ -33,6 +33,7 @@ libxl__device_kind = Enumeration("device
      (15, "VSND"),
-     (16, "VWIF"),
-+    (17, "VBD3"),
+     (16, "VINPUT"),
+     (17, "VWIF"),
++    (18, "VBD3"),
      ])
  
  libxl__console_backend = Enumeration("console_backend", [
+--- a/tools/xl/xl_parse.c
++++ b/tools/xl/xl_parse.c
+@@ -1590,6 +1590,7 @@ void parse_config_data(const char *confi
+     if (!xlu_cfg_get_long(config, "max_event_channels", &l, 0))
+         b_info->event_channels = l;
+ 
++    xlu_cfg_replace_string (config, "crypto_key_dir", &b_info->crypto_key_dir, 0);
+     xlu_cfg_replace_string (config, "kernel", &b_info->kernel, 0);
+     xlu_cfg_replace_string (config, "ramdisk", &b_info->ramdisk, 0);
+     xlu_cfg_replace_string (config, "device_tree", &b_info->device_tree, 0);
+@@ -2019,6 +2020,13 @@ void parse_config_data(const char *confi
+             parse_disk_config(&config, buf2, disk);
+ 
+             free(buf2);
++
++            if (d_config->b_info.crypto_key_dir) {
++                replace_string(&disk->crypto_key_dir,
++                               d_config->b_info.crypto_key_dir);
++            } else {
++                disk->crypto_key_dir = NULL;
++            }
+         }
+     }
+ 
+--- a/tools/libxl/libxl_dm.c
++++ b/tools/libxl/libxl_dm.c
+@@ -1889,7 +1889,9 @@ static int libxl__build_device_model_arg
+                     continue;
+                 }
+ 
+-                assert(disks[i].backend != LIBXL_DISK_BACKEND_TAP);
++                if (disks[i].backend == LIBXL_DISK_BACKEND_TAP)
++                    target_path = libxl__blktap_devpath(gc, disks[i].pdev_path,
++                                                        disks[i].format, disks[i].crypto_key_dir);
+                 target_path = libxl__device_disk_find_local_path(gc,
+                                     guest_domid, &disks[i], true);
+ 

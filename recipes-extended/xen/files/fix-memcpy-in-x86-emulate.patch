@@ -115,12 +115,3 @@ PATCHES
  static int
  hvm_emulate_write(enum x86_segment seg,
                    unsigned long offset,
-@@ -214,7 +234,7 @@ hvm_emulate_write(enum x86_segment seg,
-         return ~PTR_ERR(ptr);
- 
-     paging_lock(v->domain);
--    memcpy(ptr, p_data, bytes);
-+    __sh_atomic_write(ptr, p_data, bytes);
- 
-     if ( tb_init_done )
-         v->arch.paging.mode->shadow.trace_emul_write_val(ptr, addr,

@@ -1,3 +1,8 @@
+# I don't think we need this anymore with the xen change
+# to using ev_qmp with timeout
+
+
+
 --- a/tools/libxl/libxl_qmp.c
 +++ b/tools/libxl/libxl_qmp.c
 @@ -955,6 +955,7 @@ int libxl__qmp_pci_add(libxl__gc *gc, in

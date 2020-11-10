@@ -104,9 +104,9 @@ PATCHES
 --- a/xen/arch/x86/hvm/hypercall.c
 +++ b/xen/arch/x86/hvm/hypercall.c
 @@ -148,6 +148,9 @@ static const hypercall_table_t hvm_hyper
+ #ifdef CONFIG_HYPFS
+     HYPERCALL(hypfs_op),
  #endif
-     HYPERCALL(xenpmu_op),
-     COMPAT_CALL(dm_op),
 +#ifdef CONFIG_TXT_OP
 +    HYPERCALL(txt_op),
 +#endif
@@ -266,10 +266,10 @@ PATCHES
 --- a/xen/include/public/xen.h
 +++ b/xen/include/public/xen.h
 @@ -121,6 +121,7 @@ DEFINE_XEN_GUEST_HANDLE(xen_ulong_t);
- #define __HYPERVISOR_argo_op              39
  #define __HYPERVISOR_xenpmu_op            40
  #define __HYPERVISOR_dm_op                41
-+#define __HYPERVISOR_txt_op               42
+ #define __HYPERVISOR_hypfs_op             42
++#define __HYPERVISOR_txt_op               43
  
  /* Architecture-specific hypercall definitions. */
  #define __HYPERVISOR_arch_0               48

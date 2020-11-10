@@ -78,7 +78,7 @@ PATCHES
          return MTRR_TYPE_UNCACHABLE;
      }
  
--    if ( !has_iommu_pt(d) && !cache_flush_permitted(d) )
+-    if ( !is_iommu_enabled(d) && !cache_flush_permitted(d) )
 -    {
 -        *ipat = 1;
 -        return MTRR_TYPE_WRBACK;
@@ -86,12 +86,12 @@ PATCHES
 -
      for ( i = 0; i < (1ul << order); i++ )
      {
-         if ( is_xen_heap_page(mfn_to_page(mfn_add(mfn, i))) )
+         if ( is_special_page(mfn_to_page(mfn_add(mfn, i))) )
 @@ -859,6 +853,12 @@ int epte_get_entry_emt(struct domain *d,
      if ( gmtrr_mtype == -EADDRNOTAVAIL )
          return -1;
  
-+    if ( !has_iommu_pt(d) && !cache_flush_permitted(d) )
++    if ( !is_iommu_enabled(d) && !cache_flush_permitted(d) )
 +    {
 +        *ipat = 1;
 +        return MTRR_TYPE_WRBACK;

@@ -2,7 +2,7 @@ DESCRIPTION = "XSM Policy"
 LICENSE = "GPLv2"
 DEPENDS += "checkpolicy-native"
 
-XEN_REL ?= "4.12"
+XEN_REL ?= "4.14"
 PV = "${XEN_REL}+git${SRCPV}"
 
 SRCREV = "${AUTOREV}"
