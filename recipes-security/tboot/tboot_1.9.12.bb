@@ -6,9 +6,7 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=7730ab1e15a162ca347bcc1722486d89"
 S = "${WORKDIR}/${PN}-${PV}"
 
 SRC_URI = " \
-    https://downloads.sourceforge.net/project/${BPN}/${BPN}/${BPN}-${PV}.tar.gz \
-    file://0001-config-Allow-build-system-integration.patch \
-    file://0002-grub2-Adjust-module-placement-locations-when-changin.patch \
+    file://tboot-1.9.12.tar.gz \
     file://0003-tboot-Propagate-failure-to-map_tboot_pages.patch \
     file://0004-tboot-TB_POLTYPE_WARN_ON_FAILURE-with-pre-post.patch \
     file://0005-tboot-Mark-TPM-region-reserved-if-not-already.patch \
@@ -18,12 +16,11 @@ SRC_URI = " \
     file://0010-tboot-Export-TPM-event-log-to-VMM-Kernel.patch \
     file://0012-Find-e820-regions-that-include-the-limit.patch \
     file://0013-Add-support-for-launching-64-bit-PE-kernels.patch \
-    file://0014-safestringlib-Attend-GCC-warnings.patch \
     file://gcc9.patch \
 "
 
-SRC_URI[md5sum] = "5454cae3bf4c4ba47e7dac14ea3088b4"
-SRC_URI[sha256sum] = "d6f2334ae41b90e8403a2cd91a819d54356edcb81af2924f47774c72e48d3a9e"
+SRC_URI[md5sum] = "f0a8f512a21cca02e595c679cab8941b"
+SRC_URI[sha256sum] = "1933fae784d61d809dd57e9ec574521433fd1af1168bc8603f5978ecb0d01d10"
 
 inherit deploy
 
