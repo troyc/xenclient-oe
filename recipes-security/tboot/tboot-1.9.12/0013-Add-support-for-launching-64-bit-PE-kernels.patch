@@ -604,7 +604,7 @@ index 0000000..5c2b140
 +
 +    uint32_t limit = get_lowest_mod_start(lctx);
 +
-+    e820_get_highest_sized_ram(image_max + (1 << 21), (u32)limit,
++    get_highest_sized_ram(image_max + (1 << 21), (u32)limit,
 +                          &ram_base, &ram_size);
 +
 +    if ( ram_size < image_max ) {
