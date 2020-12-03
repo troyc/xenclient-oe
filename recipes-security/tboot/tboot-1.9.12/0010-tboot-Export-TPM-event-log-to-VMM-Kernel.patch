@@ -137,7 +137,7 @@ index 037609b..79dc733 100644
 +        goto fail;
 +
 +    reserve = PAGE_UP(*size);
-+    get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
++    e820_get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
 +    if (ram_start == 0)
 +        goto fail;
 +
@@ -198,7 +198,7 @@ index 037609b..79dc733 100644
 +        goto fail;
 +
 +    reserve = PAGE_UP(*size);
-+    get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
++    e820_get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
 +    if (ram_start == 0)
 +        goto fail;
 +
@@ -266,7 +266,7 @@ index 037609b..79dc733 100644
 +    reserve = PAGE_UP(*size);
 +
 +    /* Find a RAM region below 4G. */
-+    get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
++    e820_get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
 +    if ( ram_start == 0 )
 +        goto fail;
 +
