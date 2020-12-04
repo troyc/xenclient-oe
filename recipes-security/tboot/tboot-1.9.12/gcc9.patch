@@ -67,21 +67,6 @@
                  return table;
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -271,8 +271,12 @@ static void post_launch(void)
-     /*
-      * export tpm event log
-      */
--    export_evtlog(&_tboot_shared.evt_log_region, &_tboot_shared.evt_log_size,
--                  &_tboot_shared.evt_log_format);
-+    uint64_t evtlog_region, evtlog_size;
-+    uint8_t evtlog_format;
-+    export_evtlog(&evtlog_region, &evtlog_size, &evtlog_format);
-+    _tboot_shared.evt_log_region = evtlog_region;
-+    _tboot_shared.evt_log_size = evtlog_size;
-+    _tboot_shared.evt_log_format = evtlog_format;
- 
-     /* replace map in loader context with copy */
-     replace_e820_map(g_ldr_ctx);
 @@ -579,7 +583,9 @@ void shutdown(void)
  {
      struct tpm_if *tpm = get_tpm();
