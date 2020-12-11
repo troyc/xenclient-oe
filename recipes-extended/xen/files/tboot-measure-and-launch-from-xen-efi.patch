@@ -91,7 +91,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
                                             char *cfgfile_options)
 --- a/xen/arch/x86/efi/efi-boot.h
 +++ b/xen/arch/x86/efi/efi-boot.h
-@@ -9,16 +9,43 @@
+@@ -9,16 +9,51 @@
  #include <asm/msr.h>
  #include <asm/processor.h>
  #include <asm/setup.h>
@@ -123,6 +123,14 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +    const CHAR16* efi_fw_vendor;
 +} multiboot2_tag_xenefi_t;
 +
++typedef struct {
++  u32 type;
++  u32 size;
++  u32 descr_size;
++  u32 descr_vers;
++  //multiboot_uint8_t efi_mmap[0];
++} multiboot2_tag_efi_mmap_t; 
++
  /*
   * The array size needs to be one larger than the number of modules we
   * support - see __start_xen().
@@ -136,7 +144,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
  static void __init edd_put_string(u8 *dst, size_t n, const char *src)
  {
-@@ -213,6 +240,231 @@ static void __init efi_arch_process_memo
+@@ -213,6 +248,244 @@ static void __init efi_arch_process_memo
  
  }
  
@@ -168,6 +176,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +    multiboot2_tag_module_t *module;
 +    multiboot2_tag_mmap_t *mmap;
 +    multiboot2_tag_xenefi_t *xenmbi;
++    //multiboot2_tag_efi_mmap_t *efi_mmap;
 +    char* str;
 +
 +    /* We construct a multiboot2 header for TBOOT: */
@@ -250,6 +259,18 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +    xenmbi->efi_pci_roms = efi_pci_roms;
 +    xenmbi->efi_fw_vendor = efi_fw_vendor;
 +
++    PrintStr(L"AXA tag tiem 2\r\n");
++    printk("test hi\n");
++    //AXA test
++    //len = sizeof(*efi_mmap) + efi_memmap_size;
++    /*
++    efi_mmap = mbi2_add_entry(sizeof(*efi_mmap) + efi_memmap_size);//AXA is this the right size?    
++    efi_mmap->type = MULTIBOOT2_TAG_TYPE_EFI_MMAP;
++    efi_mmap->descr_size = efi_mdesc_size;
++    efi_mmap->descr_vers = 1; //AXA todo pass through the returned version
++    memcpy(((void *)efi_mmap) + sizeof(*efi_mmap), efi_memmap, efi_memmap_size); //todo user better names? lulz
++    */
++    
 +    /* Empty */
 +    tag_str = mbi2_add_entry(sizeof(*tag_str));
 +    tag_str->type = MULTIBOOT2_TAG_TYPE_END;
@@ -368,7 +389,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  static void *__init efi_arch_allocate_mmap_buffer(UINTN map_size)
  {
      return ebmalloc(map_size);
-@@ -228,12 +480,56 @@ static void __init efi_arch_pre_exit_boo
+@@ -228,12 +501,56 @@ static void __init efi_arch_pre_exit_boo
      }
  }
  
@@ -429,7 +450,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
      /* Set system registers and transfer control. */
      asm volatile("pushq $0\n\tpopfq");
-@@ -263,22 +559,35 @@ static void __init noreturn efi_arch_pos
+@@ -263,22 +580,35 @@ static void __init noreturn efi_arch_pos
                     "lretq  %[stkoff]-16"
                     : [rip] "=&r" (efer/* any dead 64-bit variable */),
                       [cr4] "+&r" (cr4)
@@ -468,7 +489,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
      name.s = get_value(&cfg, section, "ucode");
      if ( !name.s )
-@@ -290,6 +599,112 @@ static void __init efi_arch_cfg_file_lat
+@@ -290,6 +620,112 @@ static void __init efi_arch_cfg_file_lat
          read_file(dir_handle, s2w(&name), &ucode, NULL);
          efi_bs->FreePool(name.w);
      }
@@ -581,7 +602,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  }
  
  static void __init efi_arch_handle_cmdline(CHAR16 *image_name,
-@@ -564,6 +979,10 @@ static void __init efi_arch_memory_setup
+@@ -564,6 +1000,10 @@ static void __init efi_arch_memory_setup
      unsigned int i;
      EFI_STATUS status;
  
@@ -592,7 +613,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      /* Allocate space for trampoline (in first Mb). */
      cfg.addr = 0x100000;
  
-@@ -714,6 +1133,146 @@ void __init efi_multiboot2(EFI_HANDLE Im
+@@ -714,6 +1154,146 @@ void __init efi_multiboot2(EFI_HANDLE Im
      efi_exit_boot(ImageHandle, SystemTable);
  }
  
@@ -922,7 +943,15 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      efi_ih = ImageHandle;
      efi_bs = SystemTable->BootServices;
      efi_bs_revision = efi_bs->Hdr.Revision;
-@@ -1148,6 +1149,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1067,6 +1068,7 @@ static void __init efi_exit_boot(EFI_HAN
+     EFI_STATUS status;
+     UINTN info_size = 0, map_key;
+     bool retry;
++    PrintStr(L"AXA getting efi mmap.\r\n");
+ 
+     efi_bs->GetMemoryMap(&info_size, NULL, &map_key,
+                          &efi_mdesc_size, &mdesc_ver);
+@@ -1148,6 +1150,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
      __set_bit(EFI_RS, &efi_flags);
  #endif
  
@@ -931,7 +960,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      efi_init(ImageHandle, SystemTable);
  
      use_cfg_file = efi_arch_use_config_file(SystemTable);
-@@ -1238,6 +1241,13 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1238,6 +1242,13 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
          /* Get the file system interface. */
          dir_handle = get_parent_handle(loaded_image, &file_name);
  
@@ -945,7 +974,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
          /* Read and parse the config file. */
          if ( !cfg_file_name )
          {
-@@ -1382,7 +1392,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1382,7 +1393,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
              }
          }
  
