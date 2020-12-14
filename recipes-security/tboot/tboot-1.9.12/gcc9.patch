@@ -678,7 +678,8 @@ Index: tboot-1.9.12/tboot/common/efi_memmap.c
  
 +    printk(TBOOT_ERR"AXA e2\n");
      if (descr_addr == 0 || descr_ver != EFI_MEMORY_DESCRIPTOR_VERSION) {
-         printk(TBOOT_WARN"Failed to get EFI memory map\n");
+-        printk(TBOOT_WARN"Failed to get EFI memory map\n");
++        printk(TBOOT_WARN"AXA Failed to get EFI memory map; addr %x ver %x\n", descr_addr, descr_ver);
          return false;
      }
  
@@ -762,7 +763,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
      *descr_size = efi_mmap->descr_size;
      *descr_vers = efi_mmap->descr_vers;
      *mmap_size = efi_mmap->size - sizeof(struct mb2_tag_efi_mmap);
-+    printk(TBOOT_ERR"AXA find_efi_memmap 3\n");
++    printk(TBOOT_ERR"AXA find_efi_memmap 3 descr_size %x mmap_size %x\n", *descr_size, *mmap_size);
      if (*mmap_size % *descr_size) {
          printk(TBOOT_WARN "EFI memmmap (0x%x) should be a multiple of descriptor size (0x%x)\n",
  	       *mmap_size, *descr_size);
