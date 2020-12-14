@@ -6,7 +6,7 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=7730ab1e15a162ca347bcc1722486d89"
 S = "${WORKDIR}/${PN}-${PV}"
 
 SRC_URI = " \
-    file://tboot-1.9.12.tar.gz \
+    https://downloads.sourceforge.net/project/${BPN}/${BPN}/${BPN}-${PV}.tar.gz \
     file://0003-tboot-Propagate-failure-to-map_tboot_pages.patch \
     file://0004-tboot-TB_POLTYPE_WARN_ON_FAILURE-with-pre-post.patch \
     file://0005-tboot-Mark-TPM-region-reserved-if-not-already.patch \
@@ -18,8 +18,8 @@ SRC_URI = " \
     file://gcc9.patch \
 "
 
-SRC_URI[md5sum] = "f0a8f512a21cca02e595c679cab8941b"
-SRC_URI[sha256sum] = "1933fae784d61d809dd57e9ec574521433fd1af1168bc8603f5978ecb0d01d10"
+SRC_URI[md5sum] = "29cc2524e48eaba12249d3476be219b2"
+SRC_URI[sha256sum] = "007212deacab8eb159d71449766f9b2e0523439f1c4fd64d1932eb38cb60e053"
 
 inherit deploy
 

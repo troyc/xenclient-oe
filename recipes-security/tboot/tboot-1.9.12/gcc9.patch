@@ -2,7 +2,7 @@ Index: tboot-1.9.12/tboot/common/cmdline.c
 ===================================================================
 --- tboot-1.9.12.orig/tboot/common/cmdline.c
 +++ tboot-1.9.12/tboot/common/cmdline.c
-@@ -307,10 +307,12 @@ static bool parse_pci_bdf(const char **b
+@@ -308,10 +308,12 @@ static bool parse_pci_bdf(const char **b
  bool g_psbdf_enabled = false;
  static bool parse_com_psbdf(const char **bdf)
  {
@@ -19,7 +19,7 @@ Index: tboot-1.9.12/tboot/common/cmdline.c
  
      return g_psbdf_enabled;
  }
-@@ -318,10 +320,12 @@ static bool parse_com_psbdf(const char *
+@@ -319,10 +321,12 @@ static bool parse_com_psbdf(const char *
  bool g_pbbdf_enabled = false;
  static bool parse_com_pbbdf(const char **bdf)
  {
@@ -73,29 +73,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
 ===================================================================
 --- tboot-1.9.12.orig/tboot/common/tboot.c
 +++ tboot-1.9.12/tboot/common/tboot.c
-@@ -383,13 +383,19 @@ void begin_launch(void *addr, uint32_t m
-     }
-     printk(TBOOT_INFO"BSP is cpu %u\n", get_apicid());
- 
-+    printk(TBOOT_ERR"AXA hi\n");
-+    printk(TBOOT_ERR"AXA type is %016Lx\n", (unsigned long long)g_ldr_ctx->type);
-     /* make copy of e820 map that we will use and adjust */
-     if ( !s3_flag ) {
--        if ( !copy_e820_map(g_ldr_ctx) )  apply_policy(TB_ERR_FATAL);
--        if (efi_memmap_copy(g_ldr_ctx)) {
-+        if ( !copy_e820_map(g_ldr_ctx) )  {
-+	    printk(TBOOT_ERR"AXA copy_e820_map returned false\n");
-+	    apply_policy(TB_ERR_FATAL);
-+	}
-+        if (g_ldr_ctx->type == 2 && efi_memmap_copy(g_ldr_ctx)) {
-             printk(TBOOT_INFO"Original EFI memory map:\n");
-             efi_memmap_dump();
-         }
-+        printk(TBOOT_INFO"AXA hi 2\n");
-     }
- 
-     /* we need to make sure this is a (TXT-) capable platform before using */
-@@ -397,7 +403,9 @@ void begin_launch(void *addr, uint32_t m
+@@ -399,7 +399,9 @@ void begin_launch(void *addr, uint32_t m
      /* has already been launched */
  
      if (g_sinit == NULL) {
@@ -105,7 +83,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
         /* check if it is newer than BIOS provided version, then copy it to BIOS reserved region */
         g_sinit = copy_sinit(g_sinit); 
         if (g_sinit == NULL) 
-@@ -406,6 +414,7 @@ void begin_launch(void *addr, uint32_t m
+@@ -408,6 +410,7 @@ void begin_launch(void *addr, uint32_t m
             apply_policy(TB_ERR_ACMOD_VERIFY_FAILED);
      }
      
@@ -113,7 +91,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      /* make TPM ready for measured launch */
      if (!tpm_detect())
         apply_policy(TB_ERR_TPM_NOT_READY);
-@@ -573,7 +582,9 @@ void shutdown(void)
+@@ -575,7 +578,9 @@ void shutdown(void)
  {
      struct tpm_if *tpm = get_tpm();
      const struct tpm_if_fp *tpm_fp = get_tpm_fp();
@@ -124,7 +102,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      /* wait-for-sipi only invoked for APs, so skip all BSP shutdown code */
      if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_WFS ) {
          atomic_inc(&ap_wfs_count);
-@@ -588,7 +599,7 @@ void shutdown(void)
+@@ -590,7 +595,7 @@ void shutdown(void)
      }
  
      printk(TBOOT_INFO"wait until all APs ready for txt shutdown\n");
@@ -703,7 +681,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
 ===================================================================
 --- tboot-1.9.12.orig/tboot/common/loader.c
 +++ tboot-1.9.12/tboot/common/loader.c
-@@ -130,6 +130,7 @@ static struct mb2_tag
+@@ -134,6 +134,7 @@ static struct mb2_tag
      void *addr = (void *) start;
      if (start == NULL)
          return NULL;
@@ -711,7 +689,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
      if (start->type == MB2_TAG_TYPE_END)
          return NULL;
      addr += ((start->size + 7) & ~7);
-@@ -139,11 +140,16 @@ static struct mb2_tag
+@@ -143,11 +144,16 @@ static struct mb2_tag
  static struct mb2_tag 
  *find_mb2_tag_type(struct mb2_tag *start, uint32_t tag_type)
  {
@@ -728,7 +706,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
      return start;
  }
  
-@@ -1602,6 +1608,7 @@ char *get_cmdline(loader_ctx *lctx)
+@@ -1642,6 +1648,7 @@ char *get_cmdline(loader_ctx *lctx)
  
      if (lctx->type == MB1_ONLY){
          /* multiboot 1 */
@@ -736,7 +714,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
          if (((multiboot_info_t *)lctx->addr)->flags & MBI_CMDLINE){
              return (char *) ((multiboot_info_t *)lctx->addr)->cmdline;
          } else {
-@@ -1609,9 +1616,11 @@ char *get_cmdline(loader_ctx *lctx)
+@@ -1649,9 +1656,11 @@ char *get_cmdline(loader_ctx *lctx)
          }
      } else { 
          /* currently must be type  2 */
@@ -748,7 +726,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
              struct mb2_tag_string *cmd = (struct mb2_tag_string *) start;
              return (char *) &(cmd->string);
          }
-@@ -2009,8 +2018,10 @@ find_efi_memmap(loader_ctx *lctx, uint32
+@@ -2043,8 +2052,10 @@ find_efi_memmap(loader_ctx *lctx, uint32
      struct mb2_tag *start = NULL, *hit = NULL;
      struct mb2_tag_efi_mmap *efi_mmap = NULL;
  
@@ -759,7 +737,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
      if (hit == NULL) {
         return 0;
      }
-@@ -2019,6 +2030,7 @@ find_efi_memmap(loader_ctx *lctx, uint32
+@@ -2053,6 +2064,7 @@ find_efi_memmap(loader_ctx *lctx, uint32
      *descr_size = efi_mmap->descr_size;
      *descr_vers = efi_mmap->descr_vers;
      *mmap_size = efi_mmap->size - sizeof(struct mb2_tag_efi_mmap);
@@ -771,7 +749,7 @@ Index: tboot-1.9.12/tboot/common/linux.c
 ===================================================================
 --- tboot-1.9.12.orig/tboot/common/linux.c
 +++ tboot-1.9.12/tboot/common/linux.c
-@@ -145,14 +145,14 @@ bool expand_linux_image(const void *linu
+@@ -182,14 +182,14 @@ bool expand_linux_image(const void *linu
      if ( hdr->header != HDRS_MAGIC ) {
          /* old kernel */
          printk(TBOOT_ERR
