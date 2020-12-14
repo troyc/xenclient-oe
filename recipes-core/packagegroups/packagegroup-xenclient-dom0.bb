@@ -10,9 +10,18 @@ RDEPENDS_${PN} = " \
     openssh-sshd-tcp-init \
     util-linux-mount \
     util-linux-umount \
+    xen-tools-console \
+    xen-tools-hvmloader \
     xen \
     xen-efi \
+    xen-tools-flask-tools \
+    xen-tools-libxenguest \
+    xen-tools-libxenlight \
+    xen-tools-libxenstat \
+    xen-tools-libxlutil \
+    xen-tools-xenstat \
     virtual/xenstored \
+    xen-tools-xl \
     xen-xsm-policy \
     grub \
     shim \
@@ -26,8 +35,10 @@ RDEPENDS_${PN} = " \
     bridge-utils \
     iptables \
     iproute2 \
+    qemu-dm \
     seabios \
     ovmf-firmware \
+    xcpmd \
     xen-vif-scripts-dom0 \
     xenclient-dom0-tweaks \
     xenclient-splash-images \
@@ -65,11 +76,16 @@ RDEPENDS_${PN} = " \
     logrotate \
     dialog \
     xenclient-udev-force-discreet-net-to-eth0 \
+    xenclient-nwd \
     wget \
     xenclient-repo-certs \
     gobi-loader \
     usb-modeswitch \
+    upgrade-db \
+    rpc-proxy \
+    dbd \
     xenclient-language-sync \
+    atapi-pt-helper \
     audio-helper \
     qmp-helper \
     compleat \
@@ -82,11 +98,19 @@ RDEPENDS_${PN} = " \
     eject \
     linux-input \
     iputils-ping \
+    vusb-daemon \
+    xenmgr-data \
+    updatemgr \
+    uid \
+    xenmgr \
+    xen-tools-xenstore \
     tpm2-tss \
     tpm2-tools \
     ${@bb.utils.contains('DISTRO_FEATURES', 'blktap2', 'xen-tools-blktap xen-tools-libblktapctl xen-tools-libvhd xen-legacy-block-scripts xen-tap-scripts', 'xen-tools-blktap3 xen-tools-tapback', d)} \
     pesign \
     ipxe \
+    vglass \
+    disman \
 "
 
 # OE upgrade - temporarly disabled:
