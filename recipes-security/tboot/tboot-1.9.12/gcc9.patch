@@ -707,7 +707,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
      void *addr = (void *) start;
      if (start == NULL)
          return NULL;
-+    printk(TBOOT_ERR"AXA at tag %016Lx, size %016Lx, addr %p\n", (unsigned long long)start->type,(unsigned long long)start->size, addr);
++    //printk(TBOOT_ERR"AXA at tag %016Lx, size %016Lx, addr %p\n", (unsigned long long)start->type,(unsigned long long)start->size, addr);
      if (start->type == MB2_TAG_TYPE_END)
          return NULL;
      addr += ((start->size + 7) & ~7);
@@ -715,16 +715,16 @@ Index: tboot-1.9.12/tboot/common/loader.c
  static struct mb2_tag 
  *find_mb2_tag_type(struct mb2_tag *start, uint32_t tag_type)
  {
-+    printk(TBOOT_ERR"AXA searching for tag %x\n", tag_type);
++    //printk(TBOOT_ERR"AXA searching for tag %x\n", tag_type);
      while (start != NULL){
          if (start->type == tag_type)
 +        {
-+            printk(TBOOT_ERR"AXA found tag type %x\n", tag_type); 
++            printk(TBOOT_ERR"AXA found tag type %x at %p\n", tag_type, (void *)start); 
              return start;
 +        }
          start = next_mb2_tag(start);
      }
-+    printk(TBOOT_ERR"AXA did not find tag type %x\n", tag_type);
++    printk(TBOOT_ERR"AXA did not find tag type  %x at %p\n", tag_type, (void *)start); 
      return start;
  }
  
@@ -771,12 +771,21 @@ Index: tboot-1.9.12/tboot/common/linux.c
 ===================================================================
 --- tboot-1.9.12.orig/tboot/common/linux.c
 +++ tboot-1.9.12/tboot/common/linux.c
-@@ -145,7 +145,7 @@ bool expand_linux_image(const void *linu
+@@ -145,14 +145,14 @@ bool expand_linux_image(const void *linu
      if ( hdr->header != HDRS_MAGIC ) {
          /* old kernel */
          printk(TBOOT_ERR
 -               "Error: Old kernel (< 2.6.20) is not supported by tboot.\n");
+-        return false;
 +               "Error: Old kernel (< 2.6.20) is not supported by tboot.AXA %016Lx\n", (unsigned long long)hdr->header);
-         return false;
++        //AXAreturn false;
      }
  
+     if ( hdr->version < 0x0205 ) {
+         printk(TBOOT_ERR
+                "Error: Old kernel (<2.6.20) is not supported by tboot.\n");
+-        return false;
++        //AXAreturn false;
+     }
+ 
+     /* boot loader is grub, set type_of_loader to 0x7 */
