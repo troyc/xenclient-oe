@@ -65,14 +65,14 @@ Signed-off-by: Eric Chanudet <chanudete@ainfosec.com>
  tboot/txt/errors.c            |  67 ++++-------
  tboot/txt/txt.c               |   6 +-
  tboot/txt/verify.c            |  18 ++-
- utils/parse_err.c             |  36 +-----
+ utils/txt-parse_err.c             |  36 +-----
  16 files changed, 597 insertions(+), 266 deletions(-)
  create mode 100644 docs/error_handling.txt
 
-Index: tboot-1.9.12/docs/error_handling.txt
+Index: tboot-1.10.0/docs/error_handling.txt
 ===================================================================
 --- /dev/null
-+++ tboot-1.9.12/docs/error_handling.txt
++++ tboot-1.10.0/docs/error_handling.txt
 @@ -0,0 +1,219 @@
 +Goal:
 +====
@@ -293,10 +293,10 @@ Index: tboot-1.9.12/docs/error_handling.txt
 +       error code will be lost and a subsequent reboot will attempt a
 +       measured launch again (and presumably fail again).
 +
-Index: tboot-1.9.12/include/tb_error.h
+Index: tboot-1.10.0/include/tb_error.h
 ===================================================================
---- tboot-1.9.12.orig/include/tb_error.h
-+++ tboot-1.9.12/include/tb_error.h
+--- tboot-1.10.0.orig/include/tb_error.h
++++ tboot-1.10.0/include/tb_error.h
 @@ -33,18 +33,28 @@
   *
   */
@@ -342,10 +342,10 @@ Index: tboot-1.9.12/include/tb_error.h
  
  #endif /* __TB_ERROR_H__ */
  
-Index: tboot-1.9.12/include/tb_policy.h
+Index: tboot-1.10.0/include/tb_policy.h
 ===================================================================
---- tboot-1.9.12.orig/include/tb_policy.h
-+++ tboot-1.9.12/include/tb_policy.h
+--- tboot-1.10.0.orig/include/tb_policy.h
++++ tboot-1.10.0/include/tb_policy.h
 @@ -43,9 +43,9 @@
  enum {
      TB_POLTYPE_CONT_NON_FATAL,     /* ignore all non-fatal errors and */
@@ -373,10 +373,10 @@ Index: tboot-1.9.12/include/tb_policy.h
          return "unsupported";
  }
  
-Index: tboot-1.9.12/tb_polgen/param.c
+Index: tboot-1.10.0/tb_polgen/param.c
 ===================================================================
---- tboot-1.9.12.orig/tb_polgen/param.c
-+++ tboot-1.9.12/tb_polgen/param.c
+--- tboot-1.10.0.orig/tb_polgen/param.c
++++ tboot-1.10.0/tb_polgen/param.c
 @@ -50,7 +50,7 @@
  #include "tb_polgen.h"
  
@@ -395,10 +395,10 @@ Index: tboot-1.9.12/tb_polgen/param.c
      {"halt",         int_opt : TB_POLTYPE_HALT},
      {NULL}
  };
-Index: tboot-1.9.12/tboot/common/boot.S
+Index: tboot-1.10.0/tboot/common/boot.S
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/boot.S
-+++ tboot-1.9.12/tboot/common/boot.S
+--- tboot-1.10.0.orig/tboot/common/boot.S
++++ tboot-1.10.0/tboot/common/boot.S
 @@ -38,6 +38,7 @@
  #include <msr.h>
  #include <page.h>
@@ -414,10 +414,10 @@ Index: tboot-1.9.12/tboot/common/boot.S
 -/* errorcode for post-launch memory layout verfication failure */
 -#define LAYOUT_ERR             0xc0008001
 -
- .section ".tboot_multiboot_header","w"
-         .align 4
- /* multiboot header */
-@@ -145,17 +143,17 @@ ENTRY(_post_launch_entry)
+ /* Helpers macros from XEN source code */
+         .macro mb2ht_args arg:req, args:vararg
+         .long \arg
+@@ -173,17 +171,17 @@ ENTRY(_post_launch_entry)
  	je __start                /* yes, so continue with normal launch */
  
  layout_err:       /* layout check failed so TXT RESET */
@@ -442,11 +442,11 @@ Index: tboot-1.9.12/tboot/common/boot.S
  
  
  ENTRY(__start)
-Index: tboot-1.9.12/tboot/common/integrity.c
+Index: tboot-1.10.0/tboot/common/integrity.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/integrity.c
-+++ tboot-1.9.12/tboot/common/integrity.c
-@@ -239,7 +239,7 @@ bool seal_pre_k_state(void)
+--- tboot-1.10.0.orig/tboot/common/integrity.c
++++ tboot-1.10.0/tboot/common/integrity.c
+@@ -240,7 +240,7 @@ bool seal_pre_k_state(void)
      if ( !seal_data(&g_pre_k_s3_state, sizeof(g_pre_k_s3_state),
                      NULL, 0,
                      sealed_pre_k_state, &sealed_pre_k_state_size) )
@@ -455,11 +455,11 @@ Index: tboot-1.9.12/tboot/common/integrity.c
  
      /* we can't leave the system in a state without valid measurements of
         about-to-execute code in the PCRs, so this is a fatal error */
-Index: tboot-1.9.12/tboot/common/loader.c
+Index: tboot-1.10.0/tboot/common/loader.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/loader.c
-+++ tboot-1.9.12/tboot/common/loader.c
-@@ -1479,6 +1479,9 @@ bool launch_kernel(bool is_measured_laun
+--- tboot-1.10.0.orig/tboot/common/loader.c
++++ tboot-1.10.0/tboot/common/loader.c
+@@ -1486,6 +1486,9 @@ bool launch_kernel(bool is_measured_laun
          if(!move_modules_above_elf_kernel(g_ldr_ctx, (elf_header_t *)kernel_image))
              return false;
  
@@ -469,7 +469,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
          printk(TBOOT_INFO"transfering control to kernel @%p...\n", 
                 kernel_entry_point);
          /* (optionally) pause when transferring to kernel */
-@@ -1505,6 +1508,10 @@ bool launch_kernel(bool is_measured_laun
+@@ -1512,6 +1515,10 @@ bool launch_kernel(bool is_measured_laun
          expand_linux_image(kernel_image, kernel_size,
                             initrd_image, initrd_size,
                             &kernel_entry_point, is_measured_launch);
@@ -480,10 +480,10 @@ Index: tboot-1.9.12/tboot/common/loader.c
          printk(TBOOT_INFO"transfering control to kernel @%p...\n", 
                 kernel_entry_point);
          /* (optionally) pause when transferring to kernel */
-Index: tboot-1.9.12/tboot/common/policy.c
+Index: tboot-1.10.0/tboot/common/policy.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/policy.c
-+++ tboot-1.9.12/tboot/common/policy.c
+--- tboot-1.10.0.orig/tboot/common/policy.c
++++ tboot-1.10.0/tboot/common/policy.c
 @@ -57,6 +57,7 @@
  #include <lcp3.h>
  #include <lcp3_hlp.h>
@@ -492,7 +492,7 @@ Index: tboot-1.9.12/tboot/common/policy.c
  #include <txt/config_regs.h>
  #include <txt/mtrrs.h>
  #include <txt/txt.h>
-@@ -70,59 +71,88 @@ extern tboot_shared_t _tboot_shared;
+@@ -72,59 +73,88 @@ extern tboot_shared_t _tboot_shared;
  
  extern long s3_flag;
  
@@ -612,7 +612,7 @@ Index: tboot-1.9.12/tboot/common/policy.c
      },
  };
  
-@@ -136,7 +166,7 @@ static uint8_t _policy_index_buf[MAX_POL
+@@ -138,7 +168,7 @@ static uint8_t _policy_index_buf[MAX_POL
  /* default policy */
  static const tb_policy_t _def_policy = {
      version        : 2,
@@ -621,7 +621,7 @@ Index: tboot-1.9.12/tboot/common/policy.c
      hash_alg       : TB_HALG_SHA256,
      policy_control : TB_POLCTL_EXTEND_PCR17,
      num_entries    : 3,
-@@ -166,7 +196,7 @@ static const tb_policy_t _def_policy = {
+@@ -198,7 +228,7 @@ static const tb_policy_t _def_policy_12
  /* default policy for Details/Authorities pcr mapping */
  static const tb_policy_t _def_policy_da = {
      version        : 2,
@@ -630,7 +630,7 @@ Index: tboot-1.9.12/tboot/common/policy.c
      hash_alg       : TB_HALG_SHA256,
      policy_control : TB_POLCTL_EXTEND_PCR17,
      num_entries    : 3,
-@@ -542,30 +572,35 @@ static bool is_hash_in_policy_entry(cons
+@@ -633,30 +663,35 @@ static bool is_hash_in_policy_entry(cons
  /*
   * map policy type + error -> action
   */
@@ -676,7 +676,7 @@ Index: tboot-1.9.12/tboot/common/policy.c
  }
  
  /*
-@@ -573,34 +608,59 @@ static tb_policy_action_t evaluate_error
+@@ -664,34 +699,59 @@ static tb_policy_action_t evaluate_error
   */
  void apply_policy(tb_error_t error)
  {
@@ -759,10 +759,10 @@ Index: tboot-1.9.12/tboot/common/policy.c
      shutdown();
  }
  
-Index: tboot-1.9.12/tboot/common/tb_error.c
+Index: tboot-1.10.0/tboot/common/tb_error.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/tb_error.c
-+++ tboot-1.9.12/tboot/common/tb_error.c
+--- tboot-1.10.0.orig/tboot/common/tb_error.c
++++ tboot-1.10.0/tboot/common/tb_error.c
 @@ -50,6 +50,8 @@
  #include <tboot.h>
  #include <txt/config_regs.h>
@@ -911,11 +911,11 @@ Index: tboot-1.9.12/tboot/common/tb_error.c
 +    write_error_index(error);
  }
 -
-Index: tboot-1.9.12/tboot/common/tboot.c
+Index: tboot-1.10.0/tboot/common/tboot.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/tboot.c
-+++ tboot-1.9.12/tboot/common/tboot.c
-@@ -188,8 +188,9 @@ static void post_launch(void)
+--- tboot-1.10.0.orig/tboot/common/tboot.c
++++ tboot-1.10.0/tboot/common/tboot.c
+@@ -203,8 +203,9 @@ static void post_launch(void)
      err = txt_protect_mem_regions();
      apply_policy(err);
  
@@ -927,7 +927,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
  
      /* verify that tboot is in valid RAM (i.e. E820_RAM) */
      base = (uint64_t)TBOOT_BASE_ADDR;
-@@ -299,7 +300,7 @@ void launch_racm(void)
+@@ -314,7 +315,7 @@ void launch_racm(void)
  
      /* prepare cpu */
      if ( !prepare_cpu() )
@@ -936,7 +936,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
  
      /* prepare tpm */
      if ( !prepare_tpm() )
-@@ -426,6 +427,8 @@ void begin_launch(void *addr, uint32_t m
+@@ -450,6 +451,8 @@ void begin_launch(void *addr, uint32_t m
  
      /* print any errors on last boot, which must be from TXT launch */
      txt_display_errors();
@@ -945,7 +945,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      if (txt_has_error() && get_tboot_ignore_prev_err() == false) {
          apply_policy(TB_ERR_PREV_TXT_ERROR);
      }
-@@ -457,13 +460,6 @@ void begin_launch(void *addr, uint32_t m
+@@ -481,13 +484,6 @@ void begin_launch(void *addr, uint32_t m
          apply_policy(TB_ERR_FATAL);
      }
  
@@ -959,7 +959,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      if ( !prepare_tpm() )
          apply_policy(TB_ERR_TPM_NOT_READY);
  
-@@ -512,6 +508,9 @@ void s3_launch(void)
+@@ -536,6 +532,9 @@ void s3_launch(void)
      if ( g_vga_delay > 0 )
          delay(g_vga_delay * 1000);
  
@@ -969,10 +969,10 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      _prot_to_real(g_post_k_s3_state.kernel_s3_resume_vector);
  }
  
-Index: tboot-1.9.12/tboot/include/txt/errorcode.h
+Index: tboot-1.10.0/tboot/include/txt/errorcode.h
 ===================================================================
---- tboot-1.9.12.orig/tboot/include/txt/errorcode.h
-+++ tboot-1.9.12/tboot/include/txt/errorcode.h
+--- tboot-1.10.0.orig/tboot/include/txt/errorcode.h
++++ tboot-1.10.0/tboot/include/txt/errorcode.h
 @@ -37,59 +37,117 @@
  #define __TXT_ERRORCODE_H__
  
@@ -1130,10 +1130,10 @@ Index: tboot-1.9.12/tboot/include/txt/errorcode.h
  
  #endif    /* __TXT_ERRORCODE_H__ */
  
-Index: tboot-1.9.12/tboot/include/txt/txt.h
+Index: tboot-1.10.0/tboot/include/txt/txt.h
 ===================================================================
---- tboot-1.9.12.orig/tboot/include/txt/txt.h
-+++ tboot-1.9.12/tboot/include/txt/txt.h
+--- tboot-1.10.0.orig/tboot/include/txt/txt.h
++++ tboot-1.10.0/tboot/include/txt/txt.h
 @@ -57,6 +57,7 @@ extern void txt_post_launch(void);
  extern tb_error_t txt_protect_mem_regions(void);
  extern tb_error_t txt_post_launch_verify_platform(void);
@@ -1142,10 +1142,10 @@ Index: tboot-1.9.12/tboot/include/txt/txt.h
  extern void txt_shutdown(void);
  extern bool txt_is_powercycle_required(void);
  extern void ap_wait(unsigned int cpuid);
-Index: tboot-1.9.12/tboot/txt/errors.c
+Index: tboot-1.10.0/tboot/txt/errors.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/txt/errors.c
-+++ tboot-1.9.12/tboot/txt/errors.c
+--- tboot-1.10.0.orig/tboot/txt/errors.c
++++ tboot-1.10.0/tboot/txt/errors.c
 @@ -50,8 +50,13 @@ void txt_display_errors(void)
      txt_errorcode_t err;
      txt_ests_t ests;
@@ -1249,10 +1249,10 @@ Index: tboot-1.9.12/tboot/txt/errors.c
          printk(TBOOT_ERR"Unknown SW error.\n");
          return;
      }
-Index: tboot-1.9.12/tboot/txt/txt.c
+Index: tboot-1.10.0/tboot/txt/txt.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/txt/txt.c
-+++ tboot-1.9.12/tboot/txt/txt.c
+--- tboot-1.10.0.orig/tboot/txt/txt.c
++++ tboot-1.10.0/tboot/txt/txt.c
 @@ -60,6 +60,7 @@
  #include <efi_memmap.h>
  #include <txt/txt.h>
@@ -1261,7 +1261,7 @@ Index: tboot-1.9.12/tboot/txt/txt.c
  #include <txt/mtrrs.h>
  #include <txt/heap.h>
  #include <txt/acmod.h>
-@@ -847,7 +848,7 @@ tb_error_t txt_launch_environment(loader
+@@ -850,7 +851,7 @@ tb_error_t txt_launch_environment(loader
                               g_mle_hdr.mle_start_off + TBOOT_BASE_ADDR,
                               g_mle_hdr.mle_end_off - g_mle_hdr.mle_start_off);
      if ( mle_ptab_base == NULL )
@@ -1270,9 +1270,9 @@ Index: tboot-1.9.12/tboot/txt/txt.c
  
      configure_vtd();
  
-@@ -860,7 +861,8 @@ tb_error_t txt_launch_environment(loader
-     os_mle_data = get_os_mle_data_start(txt_heap);
-     save_mtrrs(&(os_mle_data->saved_mtrr_state));
+@@ -878,7 +879,8 @@ tb_error_t txt_launch_environment(loader
+     */
+     printk_flush();
  
 -    /* set MTRRs properly for AC module (SINIT) */
 +    /* set MTRRs properly for AC module (SINIT); if this fails the MTRRs may
@@ -1280,10 +1280,10 @@ Index: tboot-1.9.12/tboot/txt/txt.c
      if ( !set_mtrrs_for_acmod(g_sinit) )
          return TB_ERR_FATAL;
  
-Index: tboot-1.9.12/tboot/txt/verify.c
+Index: tboot-1.10.0/tboot/txt/verify.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/txt/verify.c
-+++ tboot-1.9.12/tboot/txt/verify.c
+--- tboot-1.10.0.orig/tboot/txt/verify.c
++++ tboot-1.10.0/tboot/txt/verify.c
 @@ -216,6 +216,18 @@ tb_error_t supports_txt(void)
      printk(TBOOT_INFO"SMX is enabled\n");
  
@@ -1316,10 +1316,10 @@ Index: tboot-1.9.12/tboot/txt/verify.c
  
      if ( !vtd_bios_enabled() ) {
          return TB_ERR_VTD_NOT_SUPPORTED;
-Index: tboot-1.9.12/utils/parse_err.c
+Index: tboot-1.10.0/utils/txt-parse_err.c
 ===================================================================
---- tboot-1.9.12.orig/utils/parse_err.c
-+++ tboot-1.9.12/utils/parse_err.c
+--- tboot-1.10.0.orig/utils/txt-parse_err.c
++++ tboot-1.10.0/utils/txt-parse_err.c
 @@ -57,7 +57,7 @@ static inline uint64_t read_txt_config_r
  
  int main(int argc, char *argv[])

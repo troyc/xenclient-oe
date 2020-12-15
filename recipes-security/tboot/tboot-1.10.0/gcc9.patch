@@ -1,7 +1,7 @@
-Index: tboot-1.9.12/tboot/common/cmdline.c
+Index: tboot-1.10.0/tboot/common/cmdline.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/cmdline.c
-+++ tboot-1.9.12/tboot/common/cmdline.c
+--- tboot-1.10.0.orig/tboot/common/cmdline.c
++++ tboot-1.10.0/tboot/common/cmdline.c
 @@ -308,10 +308,12 @@ static bool parse_pci_bdf(const char **b
  bool g_psbdf_enabled = false;
  static bool parse_com_psbdf(const char **bdf)
@@ -36,10 +36,10 @@ Index: tboot-1.9.12/tboot/common/cmdline.c
  
      return g_pbbdf_enabled;
  }
-Index: tboot-1.9.12/tboot/common/acpi.c
+Index: tboot-1.10.0/tboot/common/acpi.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/acpi.c
-+++ tboot-1.9.12/tboot/common/acpi.c
+--- tboot-1.10.0.orig/tboot/common/acpi.c
++++ tboot-1.10.0/tboot/common/acpi.c
 @@ -181,12 +181,11 @@ static struct acpi_table_header *find_ta
      struct acpi_table_header *table = NULL;
      struct acpi_xsdt *xsdt = get_xsdt(); /* it is ok even on 1.0 tables */
@@ -69,11 +69,11 @@ Index: tboot-1.9.12/tboot/common/acpi.c
              if ( tb_memcmp(table->signature, table_name,
                          sizeof(table->signature)) == 0 )
                  return table;
-Index: tboot-1.9.12/tboot/common/tboot.c
+Index: tboot-1.10.0/tboot/common/tboot.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/tboot.c
-+++ tboot-1.9.12/tboot/common/tboot.c
-@@ -399,7 +399,9 @@ void begin_launch(void *addr, uint32_t m
+--- tboot-1.10.0.orig/tboot/common/tboot.c
++++ tboot-1.10.0/tboot/common/tboot.c
+@@ -423,7 +423,9 @@ void begin_launch(void *addr, uint32_t m
      /* has already been launched */
  
      if (g_sinit == NULL) {
@@ -83,7 +83,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
         /* check if it is newer than BIOS provided version, then copy it to BIOS reserved region */
         g_sinit = copy_sinit(g_sinit); 
         if (g_sinit == NULL) 
-@@ -408,6 +410,7 @@ void begin_launch(void *addr, uint32_t m
+@@ -432,6 +434,7 @@ void begin_launch(void *addr, uint32_t m
             apply_policy(TB_ERR_ACMOD_VERIFY_FAILED);
      }
      
@@ -91,7 +91,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      /* make TPM ready for measured launch */
      if (!tpm_detect())
         apply_policy(TB_ERR_TPM_NOT_READY);
-@@ -575,7 +578,9 @@ void shutdown(void)
+@@ -599,7 +602,9 @@ void shutdown(void)
  {
      struct tpm_if *tpm = get_tpm();
      const struct tpm_if_fp *tpm_fp = get_tpm_fp();
@@ -102,7 +102,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      /* wait-for-sipi only invoked for APs, so skip all BSP shutdown code */
      if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_WFS ) {
          atomic_inc(&ap_wfs_count);
-@@ -590,7 +595,7 @@ void shutdown(void)
+@@ -614,7 +619,7 @@ void shutdown(void)
      }
  
      printk(TBOOT_INFO"wait until all APs ready for txt shutdown\n");
@@ -111,10 +111,10 @@ Index: tboot-1.9.12/tboot/common/tboot.c
             < atomic_read(&ap_wfs_count) )
          cpu_relax();
  
-Index: tboot-1.9.12/tboot/txt/verify.c
+Index: tboot-1.10.0/tboot/txt/verify.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/txt/verify.c
-+++ tboot-1.9.12/tboot/txt/verify.c
+--- tboot-1.10.0.orig/tboot/txt/verify.c
++++ tboot-1.10.0/tboot/txt/verify.c
 @@ -408,9 +408,11 @@ tb_error_t txt_verify_platform(void)
  static bool verify_saved_mtrrs(txt_heap_t *txt_heap)
  {
@@ -128,10 +128,10 @@ Index: tboot-1.9.12/tboot/txt/verify.c
  }
  
  tb_error_t txt_post_launch_verify_platform(void)
-Index: tboot-1.9.12/lcptools/readpol.c
+Index: tboot-1.10.0/deprecated/lcptools/readpol.c
 ===================================================================
---- tboot-1.9.12.orig/lcptools/readpol.c
-+++ tboot-1.9.12/lcptools/readpol.c
+--- tboot-1.10.0.orig/deprecated/lcptools/readpol.c
++++ tboot-1.10.0/deprecated/lcptools/readpol.c
 @@ -147,6 +147,8 @@ static void print_policy(unsigned char*
                                        "LCP_POLTYPE_UNSIGNED",
                                        "LCP_POLTYPE_SIGNED", "LCP_POLTYPE_ANY",
@@ -157,10 +157,10 @@ Index: tboot-1.9.12/lcptools/readpol.c
      lcp_unloaddata(sizeof(pol.policy_hash.sha1), &pdata,
  		   (unsigned char *)&pol.policy_hash);
  
-Index: tboot-1.9.12/safestringlib/safeclib/mem_primitives_lib.c
+Index: tboot-1.10.0/safestringlib/safeclib/mem_primitives_lib.c
 ===================================================================
---- tboot-1.9.12.orig/safestringlib/safeclib/mem_primitives_lib.c
-+++ tboot-1.9.12/safestringlib/safeclib/mem_primitives_lib.c
+--- tboot-1.10.0.orig/safestringlib/safeclib/mem_primitives_lib.c
++++ tboot-1.10.0/safestringlib/safeclib/mem_primitives_lib.c
 @@ -108,21 +108,21 @@ mem_prim_set (void *dest, uint32_t len,
              lcount -= 16;
              break;
@@ -494,11 +494,11 @@ Index: tboot-1.9.12/safestringlib/safeclib/mem_primitives_lib.c
              case 1:  *--dp = *--sp;
                  len = 0;
                  break;
-Index: tboot-1.9.12/tboot/txt/txt.c
+Index: tboot-1.10.0/tboot/txt/txt.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/txt/txt.c
-+++ tboot-1.9.12/tboot/txt/txt.c
-@@ -859,7 +859,9 @@ tb_error_t txt_launch_environment(loader
+--- tboot-1.10.0.orig/tboot/txt/txt.c
++++ tboot-1.10.0/tboot/txt/txt.c
+@@ -862,7 +862,9 @@ tb_error_t txt_launch_environment(loader
  
      /* save MTRRs before we alter them for SINIT launch */
      os_mle_data = get_os_mle_data_start(txt_heap);
@@ -507,9 +507,9 @@ Index: tboot-1.9.12/tboot/txt/txt.c
 +    save_mtrrs(&saved_mtrr_state);
 +    os_mle_data->saved_mtrr_state = saved_mtrr_state;
  
-     /* set MTRRs properly for AC module (SINIT); if this fails the MTRRs may
-        not be in a good state to continue a launch, so return TB_ERR_FATAL */
-@@ -1099,7 +1101,8 @@ void txt_post_launch(void)
+     /* 
+      * Disable VGA logging when using framebuffer. Writing to it will be
+@@ -1129,7 +1131,8 @@ void txt_post_launch(void)
      }
  
      /* restore pre-SENTER MTRRs that were overwritten for SINIT launch */
@@ -519,7 +519,7 @@ Index: tboot-1.9.12/tboot/txt/txt.c
  
      /* now, if there was an error, apply policy */
      apply_policy(err);
-@@ -1130,8 +1133,10 @@ void ap_wait(unsigned int cpuid)
+@@ -1160,8 +1163,10 @@ void ap_wait(unsigned int cpuid)
      misc |= MSR_IA32_MISC_ENABLE_MONITOR_FSM;
      wrmsr(MSR_IA32_MISC_ENABLE, misc);
  
@@ -531,7 +531,7 @@ Index: tboot-1.9.12/tboot/txt/txt.c
      mtx_leave(&ap_lock);
  
      printk(TBOOT_INFO"cpu %u mwait'ing\n", cpuid);
-@@ -1145,7 +1150,7 @@ void ap_wait(unsigned int cpuid)
+@@ -1175,7 +1180,7 @@ void ap_wait(unsigned int cpuid)
  
      uint32_t sipi_vec = (uint32_t)_tboot_shared.ap_wake_addr;
      atomic_dec(&ap_wfs_count);
@@ -540,7 +540,7 @@ Index: tboot-1.9.12/tboot/txt/txt.c
      cpu_wakeup(cpuid, sipi_vec);
  }
  
-@@ -1183,7 +1188,8 @@ void txt_cpu_wakeup(void)
+@@ -1213,7 +1218,8 @@ void txt_cpu_wakeup(void)
      os_mle_data = get_os_mle_data_start(txt_heap);
  
      /* apply (validated) (pre-SENTER) MTRRs from BSP to each AP */
@@ -550,10 +550,10 @@ Index: tboot-1.9.12/tboot/txt/txt.c
  
      /* restore pre-SENTER IA32_MISC_ENABLE_MSR */
      wrmsr(MSR_IA32_MISC_ENABLE, os_mle_data->saved_misc_enable_msr);
-Index: tboot-1.9.12/tboot/txt/vmcs.c
+Index: tboot-1.10.0/tboot/txt/vmcs.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/txt/vmcs.c
-+++ tboot-1.9.12/tboot/txt/vmcs.c
+--- tboot-1.10.0.orig/tboot/txt/vmcs.c
++++ tboot-1.10.0/tboot/txt/vmcs.c
 @@ -441,17 +441,19 @@ static bool vmx_create_vmcs(unsigned int
  static void launch_mini_guest(unsigned int cpuid)
  {
@@ -612,10 +612,10 @@ Index: tboot-1.9.12/tboot/txt/vmcs.c
          /* spin */
          while ( true )
              __asm__ __volatile__("cli; hlt;");
-Index: tboot-1.9.12/tboot/common/e820.c
+Index: tboot-1.10.0/tboot/common/e820.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/e820.c
-+++ tboot-1.9.12/tboot/common/e820.c
+--- tboot-1.10.0.orig/tboot/common/e820.c
++++ tboot-1.10.0/tboot/common/e820.c
 @@ -299,7 +299,9 @@ bool copy_e820_map(loader_ctx *lctx)
          printk(TBOOT_DETA"original e820 map:\n");
          print_map(memmap, memmap_length/sizeof(memory_map_t));
@@ -642,45 +642,21 @@ Index: tboot-1.9.12/tboot/common/e820.c
              if (lctx->type == 1)
                  entry_offset += entry->size + sizeof(entry->size);
              if (lctx->type == 2)
-Index: tboot-1.9.12/tboot/common/efi_memmap.c
+Index: tboot-1.10.0/tboot/common/efi_memmap.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/efi_memmap.c
-+++ tboot-1.9.12/tboot/common/efi_memmap.c
-@@ -57,18 +57,22 @@ static bool region_is_free(uint32_t regi
- bool efi_memmap_copy(loader_ctx *lctx)
- {
-     uint32_t descr_addr, descr_ver, descr_size, mmap_size;
-+    printk(TBOOT_ERR"AXA e1\n");
-     descr_addr = find_efi_memmap(lctx, &descr_size,
-                                  &descr_ver, &mmap_size);
- 
-+    printk(TBOOT_ERR"AXA e2\n");
-     if (descr_addr == 0 || descr_ver != EFI_MEMORY_DESCRIPTOR_VERSION) {
--        printk(TBOOT_WARN"Failed to get EFI memory map\n");
-+        printk(TBOOT_WARN"AXA Failed to get EFI memory map; addr %x ver %x\n", descr_addr, descr_ver);
-         return false;
-     }
- 
-+    printk(TBOOT_ERR"AXA e3\n");
-     efi_mmap->size = mmap_size;
-     efi_mmap->descr_size = descr_size;
-     tb_memcpy(efi_mmap->descr, (void*)descr_addr, mmap_size);
-     efi_mmap_available = true;
-+    printk(TBOOT_ERR"AXA e4\n");
- 
-     return true;
- }
-@@ -352,4 +356,4 @@ static bool region_is_free(uint32_t regi
+--- tboot-1.10.0.orig/tboot/common/efi_memmap.c
++++ tboot-1.10.0/tboot/common/efi_memmap.c
+@@ -357,4 +357,4 @@ static bool region_is_free(uint32_t regi
      } else {
          return false;
      }
 -}
 \ No newline at end of file
 +}
-Index: tboot-1.9.12/tboot/common/loader.c
+Index: tboot-1.10.0/tboot/common/loader.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/loader.c
-+++ tboot-1.9.12/tboot/common/loader.c
+--- tboot-1.10.0.orig/tboot/common/loader.c
++++ tboot-1.10.0/tboot/common/loader.c
 @@ -134,6 +134,7 @@ static struct mb2_tag
      void *addr = (void *) start;
      if (start == NULL)
@@ -706,7 +682,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
      return start;
  }
  
-@@ -1642,6 +1648,7 @@ char *get_cmdline(loader_ctx *lctx)
+@@ -1649,6 +1655,7 @@ char *get_cmdline(loader_ctx *lctx)
  
      if (lctx->type == MB1_ONLY){
          /* multiboot 1 */
@@ -714,7 +690,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
          if (((multiboot_info_t *)lctx->addr)->flags & MBI_CMDLINE){
              return (char *) ((multiboot_info_t *)lctx->addr)->cmdline;
          } else {
-@@ -1649,9 +1656,11 @@ char *get_cmdline(loader_ctx *lctx)
+@@ -1656,9 +1663,11 @@ char *get_cmdline(loader_ctx *lctx)
          }
      } else { 
          /* currently must be type  2 */
@@ -726,9 +702,9 @@ Index: tboot-1.9.12/tboot/common/loader.c
              struct mb2_tag_string *cmd = (struct mb2_tag_string *) start;
              return (char *) &(cmd->string);
          }
-@@ -2043,8 +2052,10 @@ find_efi_memmap(loader_ctx *lctx, uint32
-     struct mb2_tag *start = NULL, *hit = NULL;
-     struct mb2_tag_efi_mmap *efi_mmap = NULL;
+@@ -2060,8 +2069,10 @@ find_efi_memmap(loader_ctx *lctx, uint32
+         return 0;
+     }
  
 +    printk(TBOOT_ERR"AXA find_efi_memmap 1\n");
      start = (struct mb2_tag *)(lctx->addr + 8);
@@ -737,7 +713,7 @@ Index: tboot-1.9.12/tboot/common/loader.c
      if (hit == NULL) {
         return 0;
      }
-@@ -2053,6 +2064,7 @@ find_efi_memmap(loader_ctx *lctx, uint32
+@@ -2070,6 +2081,7 @@ find_efi_memmap(loader_ctx *lctx, uint32
      *descr_size = efi_mmap->descr_size;
      *descr_vers = efi_mmap->descr_vers;
      *mmap_size = efi_mmap->size - sizeof(struct mb2_tag_efi_mmap);
@@ -745,10 +721,10 @@ Index: tboot-1.9.12/tboot/common/loader.c
      if (*mmap_size % *descr_size) {
          printk(TBOOT_WARN "EFI memmmap (0x%x) should be a multiple of descriptor size (0x%x)\n",
  	       *mmap_size, *descr_size);
-Index: tboot-1.9.12/tboot/common/linux.c
+Index: tboot-1.10.0/tboot/common/linux.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/common/linux.c
-+++ tboot-1.9.12/tboot/common/linux.c
+--- tboot-1.10.0.orig/tboot/common/linux.c
++++ tboot-1.10.0/tboot/common/linux.c
 @@ -182,14 +182,14 @@ bool expand_linux_image(const void *linu
      if ( hdr->header != HDRS_MAGIC ) {
          /* old kernel */
