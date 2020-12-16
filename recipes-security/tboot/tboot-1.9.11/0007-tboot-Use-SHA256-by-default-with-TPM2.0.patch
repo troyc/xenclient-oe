@@ -1,7 +1,7 @@
-From 17ca712ffe926b2bc83fa5d95f23f544153b3267 Mon Sep 17 00:00:00 2001
+From b53bbfdf8feaaa3162582fe7b1df20782d531220 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 13:54:04 -0400
-Subject: [PATCH 08/14] tboot: Use SHA256 by default with TPM2.0.
+Subject: [PATCH 07/12] tboot: Use SHA256 by default with TPM2.0.
 
 Signed-off-by: Chris Rogers <rogersc@ainfosec.com>
 ---
@@ -25,5 +25,5 @@ index b7e49c2..a3e7426 100644
  
  bool get_tboot_force_tpm2_legacy_log(void)
 -- 
-2.20.1
+2.25.1
 

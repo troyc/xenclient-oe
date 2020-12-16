@@ -1,7 +1,7 @@
-From 87aac922b656ae8d92fb48a015a40849552695d9 Mon Sep 17 00:00:00 2001
+From d9d4dfb6172bc65a61cef7868fdce93a13ac19b3 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Thu, 17 Jan 2019 19:26:08 -0500
-Subject: [PATCH 14/14] safestringlib: Attend GCC warnings.
+Subject: [PATCH 12/12] safestringlib: Attend GCC warnings.
 
 Allow compilation with -Werror (OE default).
 
@@ -125,5 +125,5 @@ index 2de4e51..a323943 100644
      return (RCNEGATE(EOK));
  }
 -- 
-2.20.1
+2.25.1
 

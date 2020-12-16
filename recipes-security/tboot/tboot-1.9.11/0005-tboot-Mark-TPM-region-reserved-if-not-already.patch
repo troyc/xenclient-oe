@@ -1,7 +1,7 @@
-From 3c8c7b7f6ee2296221342d028cea3e917cad93a9 Mon Sep 17 00:00:00 2001
+From 877a75fd73c254c9ed10250716f20b050a277231 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 12:02:19 -0400
-Subject: [PATCH 05/14] tboot: Mark TPM region reserved if not already.
+Subject: [PATCH 05/12] tboot: Mark TPM region reserved if not already.
 
 TPM specification defines one region @0xfed40000-0xfed44fff.  Given a
 32bits dom0 with "enough" memory (dom_mem=>4G), it is likely that the
@@ -20,10 +20,10 @@ Signed-off-by: Eric Chanudet <chanudete@ainfosec.com>
  3 files changed, 35 insertions(+)
 
 diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 7d52055..348dc0d 100644
+index 44425db..3b8b514 100644
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -193,6 +193,9 @@ static void post_launch(void)
+@@ -194,6 +194,9 @@ static void post_launch(void)
      if ( !verify_modules(g_ldr_ctx) )
          apply_policy(TB_ERR_POST_LAUNCH_VERIFICATION);
  
@@ -95,5 +95,5 @@ index bf49d53..4cd9b25 100644
  extern bool tpm_submit_cmd_crb(u32 locality, u8 *in, u32 in_size, u8 *out, u32 *out_size);
  extern bool tpm_wait_cmd_ready(uint32_t locality);
 -- 
-2.20.1
+2.25.1
 

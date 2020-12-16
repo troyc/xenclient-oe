@@ -1,7 +1,7 @@
-From e33e157a7c931bb6733201ac3ebbe3fa560764c0 Mon Sep 17 00:00:00 2001
+From df070ffb58353d4e75d45e6bba79e32dbd1f1951 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 13:58:44 -0400
-Subject: [PATCH 09/14] tpm2.0: Perform orderly shutdown.
+Subject: [PATCH 08/12] tpm2.0: Perform orderly shutdown.
 
 Avoid TPM_PT_LOCKOUT_COUNTER being incremented unnecessarily.
 
@@ -13,10 +13,10 @@ Signed-off-by: Chris Rogers <rogersc@ainfosec.com>
  3 files changed, 26 insertions(+), 2 deletions(-)
 
 diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 348dc0d..ed7397f 100644
+index 3b8b514..8f03532 100644
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -629,8 +629,15 @@ void shutdown(void)
+@@ -630,8 +630,15 @@ void shutdown(void)
          /* have TPM save static PCRs (in case VMM/kernel didn't) */
          /* per TCG spec, TPM can invalidate saved state if any other TPM
             operation is performed afterwards--so do this last */
@@ -82,5 +82,5 @@ index 4cd9b25..ab4a43f 100644
      bool (*context_load)(struct tpm_if *ti, u32 locality, void *context_saved, u32 *handle);
      bool (*context_flush)(struct tpm_if *ti, u32 locality, u32 handle);
 -- 
-2.20.1
+2.25.1
 

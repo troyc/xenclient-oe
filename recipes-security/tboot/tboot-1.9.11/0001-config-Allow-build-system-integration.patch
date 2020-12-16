@@ -1,7 +1,7 @@
-From f62182ef2ca1f7a71991bab7c2dc29789c3ce510 Mon Sep 17 00:00:00 2001
+From 4df8e48bbd0cefa60886b3a32abfe53c6ddfe4fa Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Thu, 9 Aug 2018 16:26:54 -0400
-Subject: [PATCH 01/14] config: Allow build system integration.
+Subject: [PATCH 01/12] config: Allow build system integration.
 
 Openembedded will redefined build tools to match the staging
 environment. Remove lazy assignements and replace with default
@@ -69,5 +69,5 @@ index 70a81a3..3a7994b 100644
  ODIR=obj
  OTDIR=objtest
 -- 
-2.20.1
+2.25.1
 

@@ -1,7 +1,7 @@
-From 39ccf8a09921a31abd2b90d80d90c726aedce9ed Mon Sep 17 00:00:00 2001
+From 64ba7d284eae4a1d7aaa4fb6622390f493c2659a Mon Sep 17 00:00:00 2001
 From: Daniel De Graaf <dgdegra@tycho.nsa.gov>
 Date: Wed, 28 Feb 2018 17:52:49 -0500
-Subject: [PATCH 12/14] Find e820 regions that include the limit
+Subject: [PATCH 10/12] Find e820 regions that include the limit
 
 Signed-off-by: Daniel De Graaf <dgdegra@tycho.nsa.gov>
 ---
@@ -33,5 +33,5 @@ index 447100b..e0c1f42 100644
          }
      }
 -- 
-2.20.1
+2.25.1
 

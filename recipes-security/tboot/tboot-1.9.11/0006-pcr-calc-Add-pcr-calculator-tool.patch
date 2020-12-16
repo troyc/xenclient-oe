@@ -1,7 +1,7 @@
-From ee18590742e5d1a809bebf387e1b717b1c662b02 Mon Sep 17 00:00:00 2001
+From 88486954aa261213e342074e29d76eb77c5218d0 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 12:10:22 -0400
-Subject: [PATCH 06/14] pcr-calc: Add pcr calculator tool.
+Subject: [PATCH 06/12] pcr-calc: Add pcr calculator tool.
 
 Usage:
 module_hash [-hjz] [-e hash_str] -c cmd_line module_file\n
@@ -15,37 +15,55 @@ module_hash [-hjz] [-e hash_str] -c cmd_line module_file\n
 
 Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 ---
- Makefile               |   2 +-
- pcr-calc/Makefile      |  70 +++++++
- pcr-calc/eventlog.c    | 119 ++++++++++++
- pcr-calc/eventlog.h    |  42 ++++
- pcr-calc/hash.c        | 234 ++++++++++++++++++++++
- pcr-calc/heap.h        | 354 ++++++++++++++++++++++++++++++++++
- pcr-calc/module_hash.c | 428 +++++++++++++++++++++++++++++++++++++++++
- pcr-calc/pcr-calc.c    | 376 ++++++++++++++++++++++++++++++++++++
- pcr-calc/tb_policy.c   |  83 ++++++++
- pcr-calc/tb_policy.h   |  43 +++++
- pcr-calc/tpm.c         | 423 ++++++++++++++++++++++++++++++++++++++++
- pcr-calc/tpm.h         | 186 ++++++++++++++++++
- pcr-calc/util.c        | 167 ++++++++++++++++
- pcr-calc/util.h        |  46 +++++
- pcr-calc/uuid.h        |  53 +++++
- 15 files changed, 2625 insertions(+), 1 deletion(-)
+ Makefile                |   2 +-
+ pcr-calc/Makefile       |  73 ++++++
+ pcr-calc/acm.c          | 214 ++++++++++++++++
+ pcr-calc/acm.h          | 139 +++++++++++
+ pcr-calc/acmmatch.c     | 323 ++++++++++++++++++++++++
+ pcr-calc/eventlog.c     | 363 +++++++++++++++++++++++++++
+ pcr-calc/eventlog.h     |  63 +++++
+ pcr-calc/eventlog_tcg.h |  86 +++++++
+ pcr-calc/hash.c         | 236 ++++++++++++++++++
+ pcr-calc/heap.h         | 354 ++++++++++++++++++++++++++
+ pcr-calc/module_hash.c  | 436 ++++++++++++++++++++++++++++++++
+ pcr-calc/pcr-calc.c     | 446 +++++++++++++++++++++++++++++++++
+ pcr-calc/platform.c     | 106 ++++++++
+ pcr-calc/platform.h     |  68 +++++
+ pcr-calc/tb_policy.c    |  83 +++++++
+ pcr-calc/tb_policy.h    |  43 ++++
+ pcr-calc/tboot.h        |  10 +
+ pcr-calc/tpm.c          | 534 ++++++++++++++++++++++++++++++++++++++++
+ pcr-calc/tpm.h          | 200 +++++++++++++++
+ pcr-calc/txt.h          |  51 ++++
+ pcr-calc/util.c         | 196 +++++++++++++++
+ pcr-calc/util.h         |  49 ++++
+ pcr-calc/uuid.h         |  53 ++++
+ 23 files changed, 4127 insertions(+), 1 deletion(-)
  create mode 100644 pcr-calc/Makefile
+ create mode 100644 pcr-calc/acm.c
+ create mode 100644 pcr-calc/acm.h
+ create mode 100644 pcr-calc/acmmatch.c
  create mode 100644 pcr-calc/eventlog.c
  create mode 100644 pcr-calc/eventlog.h
+ create mode 100644 pcr-calc/eventlog_tcg.h
  create mode 100644 pcr-calc/hash.c
  create mode 100644 pcr-calc/heap.h
  create mode 100644 pcr-calc/module_hash.c
  create mode 100644 pcr-calc/pcr-calc.c
+ create mode 100644 pcr-calc/platform.c
+ create mode 100644 pcr-calc/platform.h
  create mode 100644 pcr-calc/tb_policy.c
  create mode 100644 pcr-calc/tb_policy.h
+ create mode 100644 pcr-calc/tboot.h
  create mode 100644 pcr-calc/tpm.c
  create mode 100644 pcr-calc/tpm.h
+ create mode 100644 pcr-calc/txt.h
  create mode 100644 pcr-calc/util.c
  create mode 100644 pcr-calc/util.h
  create mode 100644 pcr-calc/uuid.h
 
+diff --git a/Makefile b/Makefile
+index 2ef127e..d896740 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -14,7 +14,7 @@ export ROOTDIR=$(CURDIR)
@@ -57,6 +75,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
  
  #
  # build rules
+diff --git a/pcr-calc/Makefile b/pcr-calc/Makefile
+new file mode 100644
+index 0000000..9bf514e
 --- /dev/null
 +++ b/pcr-calc/Makefile
 @@ -0,0 +1,73 @@
@@ -133,6 +154,703 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +
 +%.o : %.c $(BUILD_DEPS)
 +	$(CC) $(CFLAGS) -DNO_TBOOT_LOGLVL -c $< -o $@
+diff --git a/pcr-calc/acm.c b/pcr-calc/acm.c
+new file mode 100644
+index 0000000..f740f2a
+--- /dev/null
++++ b/pcr-calc/acm.c
+@@ -0,0 +1,214 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <errno.h>
++#include <unistd.h>
++#include <fcntl.h>
++#include <string.h>
++#include <inttypes.h>
++#include <sys/mman.h>
++#include <sys/stat.h>
++
++#include "uuid.h"
++#include "acm.h"
++
++#ifdef DEBUG
++# define DEBUG_PRINTD 1
++#else /* !DEBUG */
++# define DEBUG_PRINTD 0
++#endif /* DEBUG */
++
++#define printd(fmt, ...)					\
++	do { if (DEBUG_PRINTD)					\
++		fprintf(stdout, fmt "\n", ##__VA_ARGS__);	\
++	} while (0)
++
++static acm_hdr_t *get_acm_header(void *p)
++{
++	uint32_t res;
++	acm_hdr_t *hdr = p;
++
++	if (__builtin_umul_overflow(hdr->size, 4, &res))
++		return NULL;
++	if (hdr->module_type != MODULE_TYPE_CHIPSET)
++		return NULL;
++	if (hdr->module_vendor != ACM_VENDOR_INTEL)
++		return NULL;
++
++	return hdr;
++}
++
++static acm_info_table_t *get_acm_info_table(const acm_hdr_t *hdr)
++{
++	uint32_t res;
++	uint32_t offset;
++	acm_info_table_t *infotable;
++
++	/* Check infotable is in ACM. */
++	if (__builtin_uadd_overflow(hdr->header_len, hdr->scratch_size, &res))
++		return NULL;
++	if (__builtin_umul_overflow(res, 4, &res))
++		return NULL;
++	if (res > hdr->size * 4)
++		return NULL;
++
++	offset = (hdr->header_len + hdr->scratch_size) * 4;
++
++	/* Check infotable does not outbound ACM. */
++	if (__builtin_uadd_overflow(res, sizeof (*infotable), &res))
++		return NULL;
++	if (res > hdr->size * 4)
++		return NULL;
++
++	return (acm_info_table_t *)((void *)hdr + offset);
++}
++
++static acm_processor_id_list_t *get_acm_processor_list(const acm_hdr_t *hdr,
++		const acm_info_table_t *infotable)
++{
++	uint32_t res1, res2;
++	uint32_t offset;
++	acm_processor_id_list_t *proclist;
++
++	offset = infotable->processor_id_list;
++	proclist = (acm_processor_id_list_t *)((void *)hdr + offset);
++
++	/* Check proclist is contained in ACM size. */
++	if (__builtin_umul_overflow(
++		proclist->count, sizeof (acm_processor_id_t), &res1))
++		return NULL;
++	if (__builtin_uadd_overflow(offset, sizeof (proclist->count), &res2))
++		return NULL;
++	if (__builtin_uadd_overflow(res1, res2, &res1))
++		return NULL;
++	if (res1 > hdr->size * 4)
++		return NULL;
++
++	return proclist;
++}
++
++static acm_chipset_id_list_t *get_acm_chipset_list(const acm_hdr_t *hdr,
++		const acm_info_table_t *infotable)
++{
++	uint32_t res1, res2;
++	uint32_t offset;
++	acm_chipset_id_list_t *chiplist;
++
++	offset = infotable->chipset_id_list;
++	chiplist = (acm_chipset_id_list_t *)((void *)hdr + offset);
++
++	/* Check chiplist is contained in ACM size. */
++	if (__builtin_umul_overflow(
++		chiplist->count, sizeof (acm_chipset_id_t), &res1))
++		return NULL;
++	if (__builtin_uadd_overflow(offset, sizeof (chiplist->count), &res2))
++		return NULL;
++	if (__builtin_uadd_overflow(res1, res2, &res1))
++		return NULL;
++	if (res1 > hdr->size * 4)
++		return NULL;
++
++	return chiplist;
++}
++
++static int uuids_equal(const uuid_t *u1, const uuid_t *u2)
++{
++	return (u1->data1 == u2->data1 &&
++		u1->data2 == u2->data2 &&
++		u1->data3 == u2->data3 &&
++		u1->data4 == u2->data4 &&
++		u1->data5[0] == u2->data5[0] &&
++		u1->data5[1] == u2->data5[1] &&
++		u1->data5[2] == u2->data5[2] &&
++		u1->data5[3] == u2->data5[3] &&
++		u1->data5[4] == u2->data5[4] &&
++		u1->data5[5] == u2->data5[5]);
++}
++
++struct acm *acm_load(const char *path)
++{
++	int fd;
++	void *p;
++	struct stat sb;
++	struct acm *acm;
++
++	fd = open(path, O_RDONLY);
++	if (fd < 0) {
++		printd("Failed to open file `%s': %s", path, strerror(errno));
++		return NULL;
++	}
++
++	if (fstat(fd, &sb)) {
++		printd("Failed to get file `%s' status: %s", path, strerror(errno));
++		goto fail_stat;
++	}
++
++	acm = malloc(sizeof (*acm));
++	if (!acm) {
++		printd("malloc failed: %s", strerror(errno));
++		goto fail_alloc;
++	}
++
++	acm->size = sb.st_size;
++	if (acm->size < sizeof (acm_hdr_t)) {
++		printd("Invalid ACM %s: Too small.", path);
++		goto fail_sanity;
++	}
++
++	p = mmap(NULL, acm->size, PROT_READ, MAP_PRIVATE, fd, 0);
++	if (p == MAP_FAILED) {
++		printd("mmap failed: %s", strerror(errno));
++		goto fail_map;
++	}
++	close(fd);
++
++	acm->header = get_acm_header(p);
++	if (acm->header == NULL) {
++		printd("Invalid ACM %s: Header cannot be found.", path);
++		goto fail_map;
++	}
++
++	acm->infotable = get_acm_info_table(acm->header);
++	if (acm->infotable == NULL) {
++		printd("Invalid ACM %s: Info table cannot be found.", path);
++		goto fail_map;
++	}
++
++	if (!uuids_equal(&acm->infotable->uuid, &ACM_UUID_V3)) {
++		printd("Invalid ACM %s: UUID mismatch.", path);
++		goto fail_map;
++	}
++
++	acm->chiplist = get_acm_chipset_list(acm->header, acm->infotable);
++	if (acm->chiplist == NULL) {
++		printd("Invalid ACM %s: Chipset list cannot be found.", path);
++		goto fail_map;
++	}
++
++	if (acm->infotable->version < 4)
++		acm->cpulist = NULL;
++	else {
++		acm->cpulist = get_acm_processor_list(acm->header, acm->infotable);
++		if (acm->cpulist == NULL) {
++			printd("Invalid ACM %s: Processor list cannot be found.", path);
++			goto fail_map;
++		}
++	}
++
++	return acm;
++
++fail_map:
++	munmap(acm->header, acm->size);
++fail_sanity:
++	free(acm);
++fail_alloc:
++fail_stat:
++	close(fd);
++
++	return NULL;
++}
++
++void acm_unload(struct acm *acm)
++{
++	munmap(acm->header, acm->size);
++	free(acm);
++}
+diff --git a/pcr-calc/acm.h b/pcr-calc/acm.h
+new file mode 100644
+index 0000000..ee738aa
+--- /dev/null
++++ b/pcr-calc/acm.h
+@@ -0,0 +1,139 @@
++#ifndef _ACM_H_
++# define _ACM_H_
++
++# include <stddef.h>
++# include <inttypes.h>
++
++# include "../include/mle.h"
++
++/*
++ * ACM flags; tboot:acmod.h
++ */
++typedef union {
++	uint16_t raw;
++	struct {
++		uint16_t  reserved       : 14;
++		uint16_t  pre_production : 1;
++		uint16_t  debug_signed   : 1;
++	};
++} acm_flags_t;
++
++/*
++ * ACM header; tboot:acmod.h
++ */
++typedef struct {
++#define MODULE_TYPE_CHIPSET 0x02
++	uint16_t     module_type;
++
++#define ACM_SUBTYPE_RESET   0x01
++	uint16_t     module_subtype;
++
++	uint32_t     header_len;
++	uint32_t     header_ver;    /* currently 0.0 */
++	uint16_t     chipset_id;
++	acm_flags_t  flags;
++
++#define ACM_VENDOR_INTEL    0x8086
++	uint32_t     module_vendor;
++
++	uint32_t     date;
++	uint32_t     size;
++	uint16_t     txt_svn;
++	uint16_t     se_svn;
++	uint32_t     code_control;
++	uint32_t     error_entry_point;
++	uint32_t     gdt_limit;
++	uint32_t     gdt_base;
++	uint32_t     seg_sel;
++	uint32_t     entry_point;
++	uint8_t      reserved2[64];
++	uint32_t     key_size;
++	uint32_t     scratch_size;
++	uint8_t      rsa2048_pubkey[256];
++	uint32_t     pub_exp;
++	uint8_t      rsa2048_sig[256];
++	uint32_t     scratch[143];
++	uint8_t      user_area[];
++}__attribute__((packed)) acm_hdr_t;
++
++/*
++ * ACM Info table; tboot:acmod.h
++ */
++typedef struct {
++#define ACM_UUID_V3	((uuid_t){0x7fc03aaa, 0x46a7, 0x18db, 0xac2e, \
++		{0x69, 0x8f, 0x8d, 0x41, 0x7f, 0x5a}})
++	uuid_t     uuid;
++
++#define ACM_TYPE_BIOS               0x0
++#define ACM_TYPE_SINIT              0x1
++#define ACM_TYPE_MASK               0x7
++#define ACM_TYPE_REVOCATION_MASK    0x8
++	uint8_t    chipset_acm_type;
++	uint8_t    version;             /* currently 4 */
++	uint16_t   length;
++	uint32_t   chipset_id_list;
++	uint32_t   os_sinit_data_ver;
++	uint32_t   min_mle_hdr_ver;
++	txt_caps_t capabilities;
++	uint8_t    acm_ver;
++	uint8_t    reserved[3];
++	/* versions>= 4 */
++	uint32_t   processor_id_list;
++	/* versions>= 5 */
++	uint32_t   tpm_info_list_off;
++}__attribute__((packed)) acm_info_table_t;
++
++/*
++ * ACM Processor IDs; tboot:acmod.h
++ */
++typedef struct {
++	uint32_t fms;
++	uint32_t fms_mask;
++	uint64_t platform_id;
++	uint64_t platform_mask;
++}__attribute__((packed)) acm_processor_id_t;
++
++/*
++ * ACM Processor ID list; tboot:acmod.h
++ */
++typedef struct {
++	uint32_t             count;
++	acm_processor_id_t   processor_ids[];
++}__attribute__((packed)) acm_processor_id_list_t;
++
++/*
++ * ACM Chipset IDs; tboot:acmod.h
++ */
++typedef struct {
++#define CHIPSET_FLAGS_REVISION_MASK 0x1
++	uint32_t flags;
++	uint16_t vendor_id;
++	uint16_t device_id;
++	uint16_t revision_id;
++	uint16_t reserved;
++	uint32_t extended_id;
++}__attribute__((packed)) acm_chipset_id_t;
++
++/*
++ * ACM Chipset IDs list; tboot:acmod.h
++ */
++typedef struct {
++	uint32_t            count;
++	acm_chipset_id_t    chipset_ids[];
++}__attribute__((packed)) acm_chipset_id_list_t;
++
++/*
++ * ACM main abstraction struct.
++ */
++struct acm {
++	acm_hdr_t *header;
++	acm_info_table_t *infotable;
++	acm_processor_id_list_t *cpulist;
++	acm_chipset_id_list_t *chiplist;
++	size_t size;
++};
++
++struct acm *acm_load(const char *path);
++void acm_unload(struct acm *acm);
++
++#endif /* _ACM_H_ */
+diff --git a/pcr-calc/acmmatch.c b/pcr-calc/acmmatch.c
+new file mode 100644
+index 0000000..8dc63e1
+--- /dev/null
++++ b/pcr-calc/acmmatch.c
+@@ -0,0 +1,323 @@
++#include <errno.h>
++#include <assert.h>
++#include <string.h>
++#include <getopt.h>
++#include <stdio.h>
++#include <stdlib.h>
++
++#include "platform.h"
++#include "uuid.h"
++#include "acm.h"
++#include "txt.h"
++
++#define printe(fmt, ...)         fprintf(stderr, fmt "\n", ##__VA_ARGS__)
++
++int parse_u32(const char *s, uint32_t *v)
++{
++	size_t len;
++	char *end;
++	unsigned long a;
++
++	len = strnlen(s, 11);   /* 0xVVVVVVVV\0 */
++	if (len >= 11)
++		return -EINVAL;
++
++	a = strtoul(s, &end, 0);
++	if (end != (s + len)) {
++		*v = 0;
++		return -EINVAL;
++	}
++
++	*v = a;
++	return 0;
++}
++
++int parse_u64(const char *s, uint64_t *v)
++{
++	size_t len;
++	char *end;
++	unsigned long long a;
++
++	len = strnlen(s, 19);   /* 0xVVVVVVVVVVVVVVVV\0 */
++	if (len >= 19)
++		return -EINVAL;
++
++	a = strtoull(s, &end, 0);
++	if (end != (s + len)) {
++		*v = 0;
++		return -EINVAL;
++	}
++
++	*v = a;
++	return 0;
++}
++
++static int acm_is_debug(const struct acm *acm,
++		const txt_cr_ver_fsbif_t *fsbif,
++		const txt_cr_ver_qpiif_t *qpiif)
++{
++	acm_hdr_t *header = acm->header;
++
++	switch (fsbif->raw) {
++		case 0xffffffff:
++		case 0x00000000:
++			return header->flags.debug_signed == qpiif->debug;
++		default:
++			return header->flags.debug_signed == fsbif->debug;
++	}
++}
++
++static int acm_is_sinit(const struct acm *acm)
++{
++	acm_hdr_t *header = acm->header;
++	acm_info_table_t *infotable = acm->infotable;
++
++	return header->module_type == MODULE_TYPE_CHIPSET &&
++		!(infotable->chipset_acm_type & ACM_TYPE_REVOCATION_MASK) &&
++		infotable->chipset_acm_type == ACM_TYPE_SINIT;
++}
++
++static int acm_match_chipset(const struct acm *acm,
++		const txt_cr_didvid_t *didvid)
++{
++	acm_chipset_id_list_t *chiplist = acm->chiplist;
++	unsigned int i;
++	int match = 0;
++
++	for (i = 0; !match && i < chiplist->count; ++i) {
++		acm_chipset_id_t *chipset = &chiplist->chipset_ids[i];
++
++		if (chipset->vendor_id == didvid->vid &&
++		    chipset->device_id == didvid->did) {
++			if (chipset->flags & CHIPSET_FLAGS_REVISION_MASK)
++				match = !!(chipset->revision_id & didvid->rid);
++			else
++				match = chipset->revision_id == didvid->rid;
++		}
++	}
++
++	return match;
++}
++
++static int acm_match_cpu(struct acm *acm,
++		const cpuid_proc_sig_eax_t *sig,
++		const msr_ia32_platform_id_t *msr)
++{
++	acm_processor_id_list_t *cpulist = acm->cpulist;
++	unsigned int i;
++	int match = 0;
++
++	for (i = 0; !match && i < cpulist->count; ++i) {
++		acm_processor_id_t *cpu = &cpulist->processor_ids[i];
++
++		if (cpu->fms == (sig->raw & cpu->fms_mask) &&
++		    cpu->platform_id == (msr->raw & cpu->platform_mask))
++			match = 1;
++	}
++
++	return match;
++}
++
++/*
++ * Attempts to load the file at path as an ACM.
++ * Return -EINVAL, if the ACM is invalid
++ *        -ENOSYS, if the platform does not provide the necessary information,
++ * 0 if the ACM matches the current platform,
++ * 1 if the ACM _does not_ match the current platform.
++ */
++int platform_match_acm(const char *path,
++	const txt_cr_didvid_t *didvid,
++	const txt_cr_ver_fsbif_t *fsbif,
++	const txt_cr_ver_qpiif_t *qpiif,
++	const cpuid_proc_sig_eax_t *sig,
++	const msr_ia32_platform_id_t *msr)
++{
++	struct acm *acm;
++	int rc;
++
++	assert(path != NULL);
++
++	acm = acm_load(path);
++	if (acm == NULL)
++		return -EINVAL;
++
++	if (acm_is_debug(acm, fsbif, qpiif)) {
++		rc = 1;
++		goto out;
++	}
++
++	if (!acm_is_sinit(acm)) {
++		rc = 1;
++		goto out;
++	}
++
++	if (!acm_match_chipset(acm, didvid)) {
++		rc = 1;
++		goto out;
++	}
++
++	if (acm->cpulist != NULL)
++		/* Only infotables version 4 and above include a cpulist. */
++		if (!acm_match_cpu(acm, sig, msr)) {
++			rc = 1;
++			goto out;
++		}
++
++	rc = 0;
++
++out:
++	acm_unload(acm);
++	return rc;
++}
++
++static void usage(const char *name)
++{
++	assert(name != NULL);
++	printf("Usage: %s [-h] ACM [ACMs]\n", name);
++	printf("Parse the given ACMs and display which match the current"
++		" platform on stdout.\n");
++	printf("    -h  Display this help.\n");
++	printf("    -d didvid   Provide the didvid value to be used (instead of reading TXT public configuration registers).\n");
++	printf("    -f fsbif    Provide the fsbif value to be used (instead of reading TXT public configuration registers).\n");
++	printf("    -q qpiif    Provide the qpiif value to be used (instead of reading TXT public configuration registers).\n");
++	printf("    -p msr-pid  Provide the MSR platform ID value to be used (instead of reading MSR devnodes).\n");
++	printf("    -s cpuid    Provide the cpuid signature value to be used (instead of running CPUID).\n");
++}
++
++enum {
++	FLAG_DIDVID	= 1 << 0,
++	FLAG_FSBIF	= 1 << 1,
++	FLAG_QPIIF	= 1 << 2,
++	FLAG_CPUID_SIG	= 1 << 3,
++	FLAG_MSR_PID	= 1 << 4,
++};
++
++int main(int argc, char *argv[])
++{
++	int rc, opt, i, match = 0;
++	uint32_t flags = 0;
++	const uint32_t fmask = FLAG_DIDVID | FLAG_FSBIF | FLAG_QPIIF;
++	txt_cr_didvid_t didvid = { 0 };
++	txt_cr_ver_fsbif_t fsbif = { 0 };
++	txt_cr_ver_qpiif_t qpiif = { 0 };
++	cpuid_proc_sig_eax_t sig;
++	msr_ia32_platform_id_t msr;
++
++	do {
++		opt = getopt(argc, argv, "hd:q:f:p:s:");
++		switch (opt) {
++			case 'h':
++				usage(argv[0]);
++				return 0;
++			case -1:
++				continue;
++			case 'd':
++				rc = parse_u64(optarg, &didvid.raw);
++				if (rc < 0) {
++					printe("Invalid DIDVID value provided to -d.");
++					return rc;
++				}
++				flags |= FLAG_DIDVID;
++			break;
++			case 'q':
++				rc = parse_u32(optarg, &qpiif.raw);
++				if (rc < 0) {
++					printe("Invalid QPIIF value provided to -q.");
++					return rc;
++				}
++				flags |= FLAG_QPIIF;
++				break;
++			case 'f':
++				rc = parse_u32(optarg, &fsbif.raw);
++				if (rc < 0) {
++					printe("Invalid FSBIF value provided to -f.");
++					return rc;
++				}
++				flags |= FLAG_FSBIF;
++				break;
++			case 'p':
++				rc = parse_u64(optarg, &msr.raw);
++				if (rc < 0) {
++					printe("Invalid MSR platform ID value provided to -p.");
++					return rc;
++				}
++				flags |= FLAG_MSR_PID;
++				break;
++			case 's':
++				rc = parse_u32(optarg, &sig.raw);
++				if (rc < 0) {
++					printe("Invalid CPUID signature value provided to -s.");
++					return rc;
++				}
++				flags |= FLAG_CPUID_SIG;
++			break;
++
++			default:
++				usage(argv[0]);
++				return EINVAL;
++		}
++	} while (opt != -1);
++
++	if (optind >= argc) {
++		printe("Missing path(s) to ACM file(s).");
++		usage(argv[0]);
++		return EINVAL;
++	}
++
++	if (!flags || ((flags & fmask) != fmask)) {
++		if (!access_txt_crs()) {
++			printe("Cannot access TXT control registers."
++				" Is module txt loaded?");
++			return ENOENT;
++		}
++
++		if (!(flags & FLAG_DIDVID)) {
++			if (read_txt_cr_didvid(&didvid) < 0)
++				return ENOSYS;
++		}
++		if (!(flags & FLAG_FSBIF)) {
++			if (read_txt_cr_ver_fsbif(&fsbif) < 0)
++				return ENOSYS;
++		}
++		if (!(flags & FLAG_QPIIF)) {
++			if (read_txt_cr_ver_qpiif(&qpiif) < 0)
++				return ENOSYS;
++		}
++	}
++
++	if (!(flags & FLAG_CPUID_SIG))
++		sig.raw = cpuid_eax(0x1);
++
++	if (!(flags & FLAG_MSR_PID)) {
++		if (!access_msr_devnode()) {
++			printe("Cannot access MSRs. Is module msr loaded?");
++			return ENOENT;
++		}
++		msr.raw = rdmsr(MSR_IA32_PLATFORM_ID);
++	}
++
++	for (i = optind; i < argc; ++i) {
++		rc = platform_match_acm(argv[i],
++					&didvid, &fsbif, &qpiif, &sig, &msr);
++		if (rc < 0) {
++			switch (rc) {
++				case -EINVAL:
++					printe("Invalid ACM: %s.", argv[i]);
++					break;
++				case -ENOSYS:
++					printe("Could not read platform data."
++						"You may need to load modules:"
++						" msr, txt_info.");
++					return rc;
++				default:
++					printe("Error while loading ACM: %s.", strerror(-rc));
++					return rc;
++			}
++		} else if (!rc) {
++			match = 1;
++			printf("Platform matches ACM %s.\n", argv[i]);
++		}
++	}
++
++	return match ? 0 : 1;
++}
+diff --git a/pcr-calc/eventlog.c b/pcr-calc/eventlog.c
+new file mode 100644
+index 0000000..b1b280e
 --- /dev/null
 +++ b/pcr-calc/eventlog.c
 @@ -0,0 +1,363 @@
@@ -499,6 +1217,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +
 +	return NULL;
 +}
+diff --git a/pcr-calc/eventlog.h b/pcr-calc/eventlog.h
+new file mode 100644
+index 0000000..2c3f6a5
 --- /dev/null
 +++ b/pcr-calc/eventlog.h
 @@ -0,0 +1,63 @@
@@ -565,6 +1286,101 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +struct tpm *parse_tpm20_log_tcg(void *buffer, size_t size);
 +
 +#endif
+diff --git a/pcr-calc/eventlog_tcg.h b/pcr-calc/eventlog_tcg.h
+new file mode 100644
+index 0000000..89d2ff0
+--- /dev/null
++++ b/pcr-calc/eventlog_tcg.h
+@@ -0,0 +1,86 @@
++#ifndef _EVENTLOG_TCG_H_
++# define _EVENTLOG_TCG_H_
++
++# include <stdint.h>
++
++/*
++ * To match with specification definition:
++ *
++ * struct tdTCG_EfiSpecIDEventStruct {
++ *     TCG_EfiSpecIdEventStructHeader hdr;
++ *     TCG_EfiSpecIdEventAlgorithmSizes algs;
++ *     TCG_EfiSpecIdEventVendorInfo vinfo
++ * } TCG_EfiSpecIDEventStruct;
++ *
++ * This makes it easier to parse/print the different components with dynamic
++ * sizes.
++ */
++
++typedef struct tdTCG_EfiSpecIdEventStructHeader {
++	uint8_t signature[16];
++	uint32_t platformClass;
++	uint8_t specVersionMinor;
++	uint8_t specVersionMajor;
++	uint8_t specErrata;
++	uint8_t uintnSize;
++}__attribute__((packed)) TCG_EfiSpecIdEventStructHeader;
++
++typedef struct tdTCG_EfiSpecIdEventAlgorithmSize {
++	uint16_t algorithmId;
++	uint16_t digestSize;
++}__attribute__((packed)) TCG_EfiSpecIdEventAlgorithmSize;
++
++typedef struct tdTCG_EfiSpecIdEventAlgorithmSizes {
++	uint32_t numberOfAlgorithms;
++	TCG_EfiSpecIdEventAlgorithmSize digestSizes[];
++}__attribute__((packed)) TCG_EfiSpecIdEventAlgorithmSizes;
++
++typedef struct tdTCG_EfiSpecIdEventVendorInfo {
++	uint8_t vendorInfoSize;
++	uint8_t vendorInfo[];
++}__attribute__((packed)) TCG_EfiSpecIdEventVendorInfo;
++
++/*
++ * SHA1 Event Log Entry Format.
++ */
++typedef struct tdTCG_PCR_EVENT {
++#define PCR_INDEX_HEADER    0x0
++	uint32_t PCRIndex;
++#define EV_NO_ACTION    0x3
++	uint32_t EventType;
++	uint8_t Digest[20];
++	uint32_t EventSize;
++	uint8_t Event[];
++}__attribute__((packed)) TCG_PCR_EVENT;
++
++/*
++ * Crypto Agile Log Entry Format.
++ *
++ * typedef struct tdTCG_PCR_EVENT2 {
++ *     TCG_PCR_EVENT2_HDR hdr;
++ *     TPML_DIGEST_VALUES digests;
++ *     TCG_PCR_EVENT2_EVT event;
++ * } TCG_PCR_EVENT2;
++ */
++typedef struct tdTCG_PCR_EVENT2_HDR {
++	uint32_t PCRIndex;
++	uint32_t EventType;
++}__attribute__((packed)) TCG_PCR_EVENT2_HDR;
++
++typedef struct tdTPMT_HA {
++	uint16_t AlgorithmId;
++	uint8_t Digest[];
++}__attribute__((packed)) TPMT_HA;
++
++typedef struct tdTPML_DIGEST_VALUES {
++	uint32_t Count;
++	TPMT_HA Digests[];
++}__attribute__((packed)) TPML_DIGEST_VALUES;
++
++typedef struct tdTCG_PCR_EVENT2_EVT {
++	uint32_t EventSize;
++	uint8_t Event[];
++}__attribute__((packed)) TCG_PCR_EVENT2_EVT;
++
++#endif /* !_EVENTLOG_TCG_H_ */
++
+diff --git a/pcr-calc/hash.c b/pcr-calc/hash.c
+new file mode 100644
+index 0000000..6c6e4e8
 --- /dev/null
 +++ b/pcr-calc/hash.c
 @@ -0,0 +1,236 @@
@@ -804,6 +1620,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 + * indent-tabs-mode: nil
 + * End:
 + */
+diff --git a/pcr-calc/heap.h b/pcr-calc/heap.h
+new file mode 100644
+index 0000000..c7bf9b7
 --- /dev/null
 +++ b/pcr-calc/heap.h
 @@ -0,0 +1,354 @@
@@ -1161,6 +1980,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 + * indent-tabs-mode: nil
 + * End:
 + */
+diff --git a/pcr-calc/module_hash.c b/pcr-calc/module_hash.c
+new file mode 100644
+index 0000000..35a16d0
 --- /dev/null
 +++ b/pcr-calc/module_hash.c
 @@ -0,0 +1,436 @@
@@ -1600,6 +2422,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +	if (cmdline != NULL) free(cmdline);
 +	return 1;
 +}
+diff --git a/pcr-calc/pcr-calc.c b/pcr-calc/pcr-calc.c
+new file mode 100644
+index 0000000..8c7da06
 --- /dev/null
 +++ b/pcr-calc/pcr-calc.c
 @@ -0,0 +1,446 @@
@@ -2049,6 +2874,195 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +
 +	return ret;
 +}
+diff --git a/pcr-calc/platform.c b/pcr-calc/platform.c
+new file mode 100644
+index 0000000..6a3ecf2
+--- /dev/null
++++ b/pcr-calc/platform.c
+@@ -0,0 +1,106 @@
++#include <errno.h>
++#include <string.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include <sys/types.h>
++#include <stdio.h>
++#include <stdlib.h>
++
++#include "platform.h"
++
++#define printe(fmt, ...)         fprintf(stderr, fmt "\n", ##__VA_ARGS__)
++
++int read_u32(const char *path, uint32_t *v)
++{
++	int fd;
++	ssize_t rc = 0;
++	char buf[12] = { 0 };   /* "0xVVVVVVVV\n\0" */
++	char *end;
++	unsigned long a;
++
++	fd = open(path, O_RDONLY);
++	if (fd < 0)
++		return -errno;
++
++	rc = read(fd, buf, sizeof (buf));
++	if (rc < 0) {
++		rc = -errno;
++		goto out;
++	}
++
++	a = strtoul(buf, &end, 0);
++	if (end != (buf + rc - 1)) {
++		rc = -EINVAL;
++		goto out;
++	}
++
++	*v = a;
++
++out:
++	close(fd);
++	return rc;
++}
++
++int read_u64(const char *path, uint64_t *v)
++{
++	int fd;
++	ssize_t rc = 0;
++	char buf[19] = { 0 };   /* "0xVVVVVVVVVVVVVVVV\n\0" */
++	char *end;
++	unsigned long long a;
++
++	fd = open(path, O_RDONLY);
++	if (fd < 0)
++		return -errno;
++
++	rc = read(fd, buf, sizeof (buf));
++	if (rc < 0) {
++		rc = -errno;
++		goto out;
++	}
++
++	a = strtoull(buf, &end, 0);
++	if (end != (buf + rc - 1)) {
++		rc = -EINVAL;
++		goto out;
++	}
++
++	*v = a;
++
++out:
++	close(fd);
++	return rc;
++}
++
++uint64_t rdmsr(int msr)
++{
++	int fd, rc;
++	uint64_t val;
++
++	fd = open(MSR_DEVNODE, O_RDONLY);
++	if (fd < 0) {
++		printe("open failed: %s. Is module `msr' loaded?",
++			strerror(errno));
++		return -1ULL;
++	}
++
++	rc = lseek(fd, msr, SEEK_SET);
++	if (rc < 0) {
++		printe("lseek failed: %s.", strerror(errno));
++		return -1ULL;
++	} else if (rc != msr) {
++		printe("failed to seek msr value in " MSR_DEVNODE ".");
++		return -1ULL;
++	}
++
++	rc = read(fd, &val, sizeof (val));
++	if (rc < 0) {
++		printe("read failed: %s.", strerror(errno));
++		return -1ULL;
++	} else if (rc != sizeof (val)) {
++		printe("failed to read msr value in " MSR_DEVNODE ".");
++		return -1ULL;
++	}
++
++	return val;
++}
+diff --git a/pcr-calc/platform.h b/pcr-calc/platform.h
+new file mode 100644
+index 0000000..4f7c6fa
+--- /dev/null
++++ b/pcr-calc/platform.h
+@@ -0,0 +1,68 @@
++#ifndef _PLATFORM_H_
++# define _PLATFORM_H_
++
++# include <inttypes.h>
++# include <unistd.h>
++
++/*
++ * Low-level helpers.
++ */
++/* MSR devnode exposed by the Linux msr module. */
++# define MSR_DEVNODE "/dev/cpu/0/msr"
++/* See Intel SDM Vol3A 9.11.4. */
++# define MSR_IA32_PLATFORM_ID    0x17U
++
++static inline void __cpuid(unsigned int ax, uint32_t *p)
++{
++	asm volatile (
++		"cpuid"
++		: "=a" (p[0]), "=b" (p[1]), "=c" (p[2]), "=d" (p[3]) /* outputs */
++		: "0" (ax)                                           /* inputs */
++	);
++}
++
++/* Output in EAX of CPUID EAX=1. */
++typedef union {
++	uint32_t raw;
++	struct {
++		uint32_t step:4;
++		uint32_t model:4;
++		uint32_t family:4;
++		uint32_t type:2;
++		uint32_t _res0:2;
++		uint32_t model_ext:4;
++		uint32_t family_ext:8;
++		uint32_t _res1:4;
++	};
++} cpuid_proc_sig_eax_t;
++
++/* RDMDR 0x17: IA32_PLATFORM_ID. */
++typedef union {
++	uint64_t raw;
++	struct {
++		uint64_t _res0:50;
++		uint32_t id:3;
++		uint32_t _res1:11;
++	};
++} msr_ia32_platform_id_t;
++
++static inline uint32_t cpuid_eax(unsigned int op)
++{
++	uint32_t regs[4] = { 0 };
++
++	__cpuid(op, regs);
++
++	return regs[0];
++}
++
++static inline int access_msr_devnode(void)
++{
++	return !access(MSR_DEVNODE, R_OK);
++}
++
++int read_u32(const char *path, uint32_t *v);
++int read_u64(const char *path, uint64_t *v);
++uint64_t rdmsr(int msr);
++
++#endif /* !_PLATFORM_H_ */
++
+diff --git a/pcr-calc/tb_policy.c b/pcr-calc/tb_policy.c
+new file mode 100644
+index 0000000..4215342
 --- /dev/null
 +++ b/pcr-calc/tb_policy.c
 @@ -0,0 +1,83 @@
@@ -2135,6 +3149,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +out:
 +	return NULL;
 +}
+diff --git a/pcr-calc/tb_policy.h b/pcr-calc/tb_policy.h
+new file mode 100644
+index 0000000..cc23f2f
 --- /dev/null
 +++ b/pcr-calc/tb_policy.h
 @@ -0,0 +1,43 @@
@@ -2181,6 +3198,25 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +tb_hash_t *tb_policy_hash(tb_policy_t *pol, size_t size, uint16_t alg);
 +
 +#endif
+diff --git a/pcr-calc/tboot.h b/pcr-calc/tboot.h
+new file mode 100644
+index 0000000..e5f4cfe
+--- /dev/null
++++ b/pcr-calc/tboot.h
+@@ -0,0 +1,10 @@
++#ifndef _TBOOT_H_
++# define _TBOOT_H_
++
++typedef enum {
++	TB_196,
++	TB_199,
++} tb_version_t;
++
++#endif /* !_TBOOT_H_ */
++
+diff --git a/pcr-calc/tpm.c b/pcr-calc/tpm.c
+new file mode 100644
+index 0000000..5c16c3d
 --- /dev/null
 +++ b/pcr-calc/tpm.c
 @@ -0,0 +1,534 @@
@@ -2718,6 +3754,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +		pcr_print(&bank->pcrs[i], alg);
 +	}
 +}
+diff --git a/pcr-calc/tpm.h b/pcr-calc/tpm.h
+new file mode 100644
+index 0000000..b0c25a3
 --- /dev/null
 +++ b/pcr-calc/tpm.h
 @@ -0,0 +1,200 @@
@@ -2921,6 +3960,66 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +bool pcr_record_event(struct pcr *p, uint16_t alg, uint32_t type, tb_hash_t *hash);
 +
 +#endif
+diff --git a/pcr-calc/txt.h b/pcr-calc/txt.h
+new file mode 100644
+index 0000000..adf9c9c
+--- /dev/null
++++ b/pcr-calc/txt.h
+@@ -0,0 +1,51 @@
++#ifndef _TXT_H_
++# define _TXT_H_
++
++# include <inttypes.h>
++# include <unistd.h>
++
++# define TXT_INFO_SYSFS "/sys/devices/platform/txt/"
++
++typedef union {
++	uint64_t raw;
++	struct {
++		uint16_t vid    : 16;
++		uint16_t did    : 16;
++		uint16_t rid    : 16;
++		uint16_t ext    : 16;
++	};
++} txt_cr_didvid_t;
++
++typedef union {
++	uint32_t raw;
++	struct {
++		uint32_t _res   : 31;
++		uint8_t debug   : 1;
++	};
++} txt_cr_ver_fsbif_t;
++
++typedef union {
++	uint32_t raw;
++	struct {
++		uint32_t _res   : 31;
++		uint8_t debug   : 1;
++	};
++} txt_cr_ver_qpiif_t;
++
++# define DECLARE_READ_TXT(entry, size)                          \
++	static inline int read_txt_cr_##entry(txt_cr_##entry##_t *e)    \
++{                                                               \
++	return read_##size(TXT_INFO_SYSFS #entry, &e->raw);         \
++}
++DECLARE_READ_TXT(didvid, u64);
++DECLARE_READ_TXT(ver_fsbif, u32);
++DECLARE_READ_TXT(ver_qpiif, u32);
++
++static inline int access_txt_crs(void)
++{
++	return !access(TXT_INFO_SYSFS "didvid", R_OK) &&
++		!access(TXT_INFO_SYSFS "ver_fsbif", R_OK) &&
++		!access(TXT_INFO_SYSFS "ver_qpiif", R_OK);
++}
++
++#endif /* _TXT_H_ */
+diff --git a/pcr-calc/util.c b/pcr-calc/util.c
+new file mode 100644
+index 0000000..9856a19
 --- /dev/null
 +++ b/pcr-calc/util.c
 @@ -0,0 +1,196 @@
@@ -3120,6 +4219,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +
 +	return 0;
 +}
+diff --git a/pcr-calc/util.h b/pcr-calc/util.h
+new file mode 100644
+index 0000000..57445ab
 --- /dev/null
 +++ b/pcr-calc/util.h
 @@ -0,0 +1,49 @@
@@ -3172,6 +4274,9 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +	 struct acm **acm, tb_version_t *ver, struct pcr_event *evt);
 +
 +#endif
+diff --git a/pcr-calc/uuid.h b/pcr-calc/uuid.h
+new file mode 100644
+index 0000000..7cd7e28
 --- /dev/null
 +++ b/pcr-calc/uuid.h
 @@ -0,0 +1,53 @@
@@ -3228,1024 +4333,6 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 +} uuid_t;
 +
 +#endif
---- /dev/null
-+++ b/pcr-calc/acm.c
-@@ -0,0 +1,214 @@
-+#include <stdio.h>
-+#include <stdlib.h>
-+#include <errno.h>
-+#include <unistd.h>
-+#include <fcntl.h>
-+#include <string.h>
-+#include <inttypes.h>
-+#include <sys/mman.h>
-+#include <sys/stat.h>
-+
-+#include "uuid.h"
-+#include "acm.h"
-+
-+#ifdef DEBUG
-+# define DEBUG_PRINTD 1
-+#else /* !DEBUG */
-+# define DEBUG_PRINTD 0
-+#endif /* DEBUG */
-+
-+#define printd(fmt, ...)					\
-+	do { if (DEBUG_PRINTD)					\
-+		fprintf(stdout, fmt "\n", ##__VA_ARGS__);	\
-+	} while (0)
-+
-+static acm_hdr_t *get_acm_header(void *p)
-+{
-+	uint32_t res;
-+	acm_hdr_t *hdr = p;
-+
-+	if (__builtin_umul_overflow(hdr->size, 4, &res))
-+		return NULL;
-+	if (hdr->module_type != MODULE_TYPE_CHIPSET)
-+		return NULL;
-+	if (hdr->module_vendor != ACM_VENDOR_INTEL)
-+		return NULL;
-+
-+	return hdr;
-+}
-+
-+static acm_info_table_t *get_acm_info_table(const acm_hdr_t *hdr)
-+{
-+	uint32_t res;
-+	uint32_t offset;
-+	acm_info_table_t *infotable;
-+
-+	/* Check infotable is in ACM. */
-+	if (__builtin_uadd_overflow(hdr->header_len, hdr->scratch_size, &res))
-+		return NULL;
-+	if (__builtin_umul_overflow(res, 4, &res))
-+		return NULL;
-+	if (res > hdr->size * 4)
-+		return NULL;
-+
-+	offset = (hdr->header_len + hdr->scratch_size) * 4;
-+
-+	/* Check infotable does not outbound ACM. */
-+	if (__builtin_uadd_overflow(res, sizeof (*infotable), &res))
-+		return NULL;
-+	if (res > hdr->size * 4)
-+		return NULL;
-+
-+	return (acm_info_table_t *)((void *)hdr + offset);
-+}
-+
-+static acm_processor_id_list_t *get_acm_processor_list(const acm_hdr_t *hdr,
-+		const acm_info_table_t *infotable)
-+{
-+	uint32_t res1, res2;
-+	uint32_t offset;
-+	acm_processor_id_list_t *proclist;
-+
-+	offset = infotable->processor_id_list;
-+	proclist = (acm_processor_id_list_t *)((void *)hdr + offset);
-+
-+	/* Check proclist is contained in ACM size. */
-+	if (__builtin_umul_overflow(
-+		proclist->count, sizeof (acm_processor_id_t), &res1))
-+		return NULL;
-+	if (__builtin_uadd_overflow(offset, sizeof (proclist->count), &res2))
-+		return NULL;
-+	if (__builtin_uadd_overflow(res1, res2, &res1))
-+		return NULL;
-+	if (res1 > hdr->size * 4)
-+		return NULL;
-+
-+	return proclist;
-+}
-+
-+static acm_chipset_id_list_t *get_acm_chipset_list(const acm_hdr_t *hdr,
-+		const acm_info_table_t *infotable)
-+{
-+	uint32_t res1, res2;
-+	uint32_t offset;
-+	acm_chipset_id_list_t *chiplist;
-+
-+	offset = infotable->chipset_id_list;
-+	chiplist = (acm_chipset_id_list_t *)((void *)hdr + offset);
-+
-+	/* Check chiplist is contained in ACM size. */
-+	if (__builtin_umul_overflow(
-+		chiplist->count, sizeof (acm_chipset_id_t), &res1))
-+		return NULL;
-+	if (__builtin_uadd_overflow(offset, sizeof (chiplist->count), &res2))
-+		return NULL;
-+	if (__builtin_uadd_overflow(res1, res2, &res1))
-+		return NULL;
-+	if (res1 > hdr->size * 4)
-+		return NULL;
-+
-+	return chiplist;
-+}
-+
-+static int uuids_equal(const uuid_t *u1, const uuid_t *u2)
-+{
-+	return (u1->data1 == u2->data1 &&
-+		u1->data2 == u2->data2 &&
-+		u1->data3 == u2->data3 &&
-+		u1->data4 == u2->data4 &&
-+		u1->data5[0] == u2->data5[0] &&
-+		u1->data5[1] == u2->data5[1] &&
-+		u1->data5[2] == u2->data5[2] &&
-+		u1->data5[3] == u2->data5[3] &&
-+		u1->data5[4] == u2->data5[4] &&
-+		u1->data5[5] == u2->data5[5]);
-+}
-+
-+struct acm *acm_load(const char *path)
-+{
-+	int fd;
-+	void *p;
-+	struct stat sb;
-+	struct acm *acm;
-+
-+	fd = open(path, O_RDONLY);
-+	if (fd < 0) {
-+		printd("Failed to open file `%s': %s", path, strerror(errno));
-+		return NULL;
-+	}
-+
-+	if (fstat(fd, &sb)) {
-+		printd("Failed to get file `%s' status: %s", path, strerror(errno));
-+		goto fail_stat;
-+	}
-+
-+	acm = malloc(sizeof (*acm));
-+	if (!acm) {
-+		printd("malloc failed: %s", strerror(errno));
-+		goto fail_alloc;
-+	}
-+
-+	acm->size = sb.st_size;
-+	if (acm->size < sizeof (acm_hdr_t)) {
-+		printd("Invalid ACM %s: Too small.", path);
-+		goto fail_sanity;
-+	}
-+
-+	p = mmap(NULL, acm->size, PROT_READ, MAP_PRIVATE, fd, 0);
-+	if (p == MAP_FAILED) {
-+		printd("mmap failed: %s", strerror(errno));
-+		goto fail_map;
-+	}
-+	close(fd);
-+
-+	acm->header = get_acm_header(p);
-+	if (acm->header == NULL) {
-+		printd("Invalid ACM %s: Header cannot be found.", path);
-+		goto fail_map;
-+	}
-+
-+	acm->infotable = get_acm_info_table(acm->header);
-+	if (acm->infotable == NULL) {
-+		printd("Invalid ACM %s: Info table cannot be found.", path);
-+		goto fail_map;
-+	}
-+
-+	if (!uuids_equal(&acm->infotable->uuid, &ACM_UUID_V3)) {
-+		printd("Invalid ACM %s: UUID mismatch.", path);
-+		goto fail_map;
-+	}
-+
-+	acm->chiplist = get_acm_chipset_list(acm->header, acm->infotable);
-+	if (acm->chiplist == NULL) {
-+		printd("Invalid ACM %s: Chipset list cannot be found.", path);
-+		goto fail_map;
-+	}
-+
-+	if (acm->infotable->version < 4)
-+		acm->cpulist = NULL;
-+	else {
-+		acm->cpulist = get_acm_processor_list(acm->header, acm->infotable);
-+		if (acm->cpulist == NULL) {
-+			printd("Invalid ACM %s: Processor list cannot be found.", path);
-+			goto fail_map;
-+		}
-+	}
-+
-+	return acm;
-+
-+fail_map:
-+	munmap(acm->header, acm->size);
-+fail_sanity:
-+	free(acm);
-+fail_alloc:
-+fail_stat:
-+	close(fd);
-+
-+	return NULL;
-+}
-+
-+void acm_unload(struct acm *acm)
-+{
-+	munmap(acm->header, acm->size);
-+	free(acm);
-+}
---- /dev/null
-+++ b/pcr-calc/acm.h
-@@ -0,0 +1,139 @@
-+#ifndef _ACM_H_
-+# define _ACM_H_
-+
-+# include <stddef.h>
-+# include <inttypes.h>
-+
-+# include "../include/mle.h"
-+
-+/*
-+ * ACM flags; tboot:acmod.h
-+ */
-+typedef union {
-+	uint16_t raw;
-+	struct {
-+		uint16_t  reserved       : 14;
-+		uint16_t  pre_production : 1;
-+		uint16_t  debug_signed   : 1;
-+	};
-+} acm_flags_t;
-+
-+/*
-+ * ACM header; tboot:acmod.h
-+ */
-+typedef struct {
-+#define MODULE_TYPE_CHIPSET 0x02
-+	uint16_t     module_type;
-+
-+#define ACM_SUBTYPE_RESET   0x01
-+	uint16_t     module_subtype;
-+
-+	uint32_t     header_len;
-+	uint32_t     header_ver;    /* currently 0.0 */
-+	uint16_t     chipset_id;
-+	acm_flags_t  flags;
-+
-+#define ACM_VENDOR_INTEL    0x8086
-+	uint32_t     module_vendor;
-+
-+	uint32_t     date;
-+	uint32_t     size;
-+	uint16_t     txt_svn;
-+	uint16_t     se_svn;
-+	uint32_t     code_control;
-+	uint32_t     error_entry_point;
-+	uint32_t     gdt_limit;
-+	uint32_t     gdt_base;
-+	uint32_t     seg_sel;
-+	uint32_t     entry_point;
-+	uint8_t      reserved2[64];
-+	uint32_t     key_size;
-+	uint32_t     scratch_size;
-+	uint8_t      rsa2048_pubkey[256];
-+	uint32_t     pub_exp;
-+	uint8_t      rsa2048_sig[256];
-+	uint32_t     scratch[143];
-+	uint8_t      user_area[];
-+}__attribute__((packed)) acm_hdr_t;
-+
-+/*
-+ * ACM Info table; tboot:acmod.h
-+ */
-+typedef struct {
-+#define ACM_UUID_V3	((uuid_t){0x7fc03aaa, 0x46a7, 0x18db, 0xac2e, \
-+		{0x69, 0x8f, 0x8d, 0x41, 0x7f, 0x5a}})
-+	uuid_t     uuid;
-+
-+#define ACM_TYPE_BIOS               0x0
-+#define ACM_TYPE_SINIT              0x1
-+#define ACM_TYPE_MASK               0x7
-+#define ACM_TYPE_REVOCATION_MASK    0x8
-+	uint8_t    chipset_acm_type;
-+	uint8_t    version;             /* currently 4 */
-+	uint16_t   length;
-+	uint32_t   chipset_id_list;
-+	uint32_t   os_sinit_data_ver;
-+	uint32_t   min_mle_hdr_ver;
-+	txt_caps_t capabilities;
-+	uint8_t    acm_ver;
-+	uint8_t    reserved[3];
-+	/* versions>= 4 */
-+	uint32_t   processor_id_list;
-+	/* versions>= 5 */
-+	uint32_t   tpm_info_list_off;
-+}__attribute__((packed)) acm_info_table_t;
-+
-+/*
-+ * ACM Processor IDs; tboot:acmod.h
-+ */
-+typedef struct {
-+	uint32_t fms;
-+	uint32_t fms_mask;
-+	uint64_t platform_id;
-+	uint64_t platform_mask;
-+}__attribute__((packed)) acm_processor_id_t;
-+
-+/*
-+ * ACM Processor ID list; tboot:acmod.h
-+ */
-+typedef struct {
-+	uint32_t             count;
-+	acm_processor_id_t   processor_ids[];
-+}__attribute__((packed)) acm_processor_id_list_t;
-+
-+/*
-+ * ACM Chipset IDs; tboot:acmod.h
-+ */
-+typedef struct {
-+#define CHIPSET_FLAGS_REVISION_MASK 0x1
-+	uint32_t flags;
-+	uint16_t vendor_id;
-+	uint16_t device_id;
-+	uint16_t revision_id;
-+	uint16_t reserved;
-+	uint32_t extended_id;
-+}__attribute__((packed)) acm_chipset_id_t;
-+
-+/*
-+ * ACM Chipset IDs list; tboot:acmod.h
-+ */
-+typedef struct {
-+	uint32_t            count;
-+	acm_chipset_id_t    chipset_ids[];
-+}__attribute__((packed)) acm_chipset_id_list_t;
-+
-+/*
-+ * ACM main abstraction struct.
-+ */
-+struct acm {
-+	acm_hdr_t *header;
-+	acm_info_table_t *infotable;
-+	acm_processor_id_list_t *cpulist;
-+	acm_chipset_id_list_t *chiplist;
-+	size_t size;
-+};
-+
-+struct acm *acm_load(const char *path);
-+void acm_unload(struct acm *acm);
-+
-+#endif /* _ACM_H_ */
---- /dev/null
-+++ b/pcr-calc/acmmatch.c
-@@ -0,0 +1,323 @@
-+#include <errno.h>
-+#include <assert.h>
-+#include <string.h>
-+#include <getopt.h>
-+#include <stdio.h>
-+#include <stdlib.h>
-+
-+#include "platform.h"
-+#include "uuid.h"
-+#include "acm.h"
-+#include "txt.h"
-+
-+#define printe(fmt, ...)         fprintf(stderr, fmt "\n", ##__VA_ARGS__)
-+
-+int parse_u32(const char *s, uint32_t *v)
-+{
-+	size_t len;
-+	char *end;
-+	unsigned long a;
-+
-+	len = strnlen(s, 11);   /* 0xVVVVVVVV\0 */
-+	if (len >= 11)
-+		return -EINVAL;
-+
-+	a = strtoul(s, &end, 0);
-+	if (end != (s + len)) {
-+		*v = 0;
-+		return -EINVAL;
-+	}
-+
-+	*v = a;
-+	return 0;
-+}
-+
-+int parse_u64(const char *s, uint64_t *v)
-+{
-+	size_t len;
-+	char *end;
-+	unsigned long long a;
-+
-+	len = strnlen(s, 19);   /* 0xVVVVVVVVVVVVVVVV\0 */
-+	if (len >= 19)
-+		return -EINVAL;
-+
-+	a = strtoull(s, &end, 0);
-+	if (end != (s + len)) {
-+		*v = 0;
-+		return -EINVAL;
-+	}
-+
-+	*v = a;
-+	return 0;
-+}
-+
-+static int acm_is_debug(const struct acm *acm,
-+		const txt_cr_ver_fsbif_t *fsbif,
-+		const txt_cr_ver_qpiif_t *qpiif)
-+{
-+	acm_hdr_t *header = acm->header;
-+
-+	switch (fsbif->raw) {
-+		case 0xffffffff:
-+		case 0x00000000:
-+			return header->flags.debug_signed == qpiif->debug;
-+		default:
-+			return header->flags.debug_signed == fsbif->debug;
-+	}
-+}
-+
-+static int acm_is_sinit(const struct acm *acm)
-+{
-+	acm_hdr_t *header = acm->header;
-+	acm_info_table_t *infotable = acm->infotable;
-+
-+	return header->module_type == MODULE_TYPE_CHIPSET &&
-+		!(infotable->chipset_acm_type & ACM_TYPE_REVOCATION_MASK) &&
-+		infotable->chipset_acm_type == ACM_TYPE_SINIT;
-+}
-+
-+static int acm_match_chipset(const struct acm *acm,
-+		const txt_cr_didvid_t *didvid)
-+{
-+	acm_chipset_id_list_t *chiplist = acm->chiplist;
-+	unsigned int i;
-+	int match = 0;
-+
-+	for (i = 0; !match && i < chiplist->count; ++i) {
-+		acm_chipset_id_t *chipset = &chiplist->chipset_ids[i];
-+
-+		if (chipset->vendor_id == didvid->vid &&
-+		    chipset->device_id == didvid->did) {
-+			if (chipset->flags & CHIPSET_FLAGS_REVISION_MASK)
-+				match = !!(chipset->revision_id & didvid->rid);
-+			else
-+				match = chipset->revision_id == didvid->rid;
-+		}
-+	}
-+
-+	return match;
-+}
-+
-+static int acm_match_cpu(struct acm *acm,
-+		const cpuid_proc_sig_eax_t *sig,
-+		const msr_ia32_platform_id_t *msr)
-+{
-+	acm_processor_id_list_t *cpulist = acm->cpulist;
-+	unsigned int i;
-+	int match = 0;
-+
-+	for (i = 0; !match && i < cpulist->count; ++i) {
-+		acm_processor_id_t *cpu = &cpulist->processor_ids[i];
-+
-+		if (cpu->fms == (sig->raw & cpu->fms_mask) &&
-+		    cpu->platform_id == (msr->raw & cpu->platform_mask))
-+			match = 1;
-+	}
-+
-+	return match;
-+}
-+
-+/*
-+ * Attempts to load the file at path as an ACM.
-+ * Return -EINVAL, if the ACM is invalid
-+ *        -ENOSYS, if the platform does not provide the necessary information,
-+ * 0 if the ACM matches the current platform,
-+ * 1 if the ACM _does not_ match the current platform.
-+ */
-+int platform_match_acm(const char *path,
-+	const txt_cr_didvid_t *didvid,
-+	const txt_cr_ver_fsbif_t *fsbif,
-+	const txt_cr_ver_qpiif_t *qpiif,
-+	const cpuid_proc_sig_eax_t *sig,
-+	const msr_ia32_platform_id_t *msr)
-+{
-+	struct acm *acm;
-+	int rc;
-+
-+	assert(path != NULL);
-+
-+	acm = acm_load(path);
-+	if (acm == NULL)
-+		return -EINVAL;
-+
-+	if (acm_is_debug(acm, fsbif, qpiif)) {
-+		rc = 1;
-+		goto out;
-+	}
-+
-+	if (!acm_is_sinit(acm)) {
-+		rc = 1;
-+		goto out;
-+	}
-+
-+	if (!acm_match_chipset(acm, didvid)) {
-+		rc = 1;
-+		goto out;
-+	}
-+
-+	if (acm->cpulist != NULL)
-+		/* Only infotables version 4 and above include a cpulist. */
-+		if (!acm_match_cpu(acm, sig, msr)) {
-+			rc = 1;
-+			goto out;
-+		}
-+
-+	rc = 0;
-+
-+out:
-+	acm_unload(acm);
-+	return rc;
-+}
-+
-+static void usage(const char *name)
-+{
-+	assert(name != NULL);
-+	printf("Usage: %s [-h] ACM [ACMs]\n", name);
-+	printf("Parse the given ACMs and display which match the current"
-+		" platform on stdout.\n");
-+	printf("    -h  Display this help.\n");
-+	printf("    -d didvid   Provide the didvid value to be used (instead of reading TXT public configuration registers).\n");
-+	printf("    -f fsbif    Provide the fsbif value to be used (instead of reading TXT public configuration registers).\n");
-+	printf("    -q qpiif    Provide the qpiif value to be used (instead of reading TXT public configuration registers).\n");
-+	printf("    -p msr-pid  Provide the MSR platform ID value to be used (instead of reading MSR devnodes).\n");
-+	printf("    -s cpuid    Provide the cpuid signature value to be used (instead of running CPUID).\n");
-+}
-+
-+enum {
-+	FLAG_DIDVID	= 1 << 0,
-+	FLAG_FSBIF	= 1 << 1,
-+	FLAG_QPIIF	= 1 << 2,
-+	FLAG_CPUID_SIG	= 1 << 3,
-+	FLAG_MSR_PID	= 1 << 4,
-+};
-+
-+int main(int argc, char *argv[])
-+{
-+	int rc, opt, i, match = 0;
-+	uint32_t flags = 0;
-+	const uint32_t fmask = FLAG_DIDVID | FLAG_FSBIF | FLAG_QPIIF;
-+	txt_cr_didvid_t didvid = { 0 };
-+	txt_cr_ver_fsbif_t fsbif = { 0 };
-+	txt_cr_ver_qpiif_t qpiif = { 0 };
-+	cpuid_proc_sig_eax_t sig;
-+	msr_ia32_platform_id_t msr;
-+
-+	do {
-+		opt = getopt(argc, argv, "hd:q:f:p:s:");
-+		switch (opt) {
-+			case 'h':
-+				usage(argv[0]);
-+				return 0;
-+			case -1:
-+				continue;
-+			case 'd':
-+				rc = parse_u64(optarg, &didvid.raw);
-+				if (rc < 0) {
-+					printe("Invalid DIDVID value provided to -d.");
-+					return rc;
-+				}
-+				flags |= FLAG_DIDVID;
-+			break;
-+			case 'q':
-+				rc = parse_u32(optarg, &qpiif.raw);
-+				if (rc < 0) {
-+					printe("Invalid QPIIF value provided to -q.");
-+					return rc;
-+				}
-+				flags |= FLAG_QPIIF;
-+				break;
-+			case 'f':
-+				rc = parse_u32(optarg, &fsbif.raw);
-+				if (rc < 0) {
-+					printe("Invalid FSBIF value provided to -f.");
-+					return rc;
-+				}
-+				flags |= FLAG_FSBIF;
-+				break;
-+			case 'p':
-+				rc = parse_u64(optarg, &msr.raw);
-+				if (rc < 0) {
-+					printe("Invalid MSR platform ID value provided to -p.");
-+					return rc;
-+				}
-+				flags |= FLAG_MSR_PID;
-+				break;
-+			case 's':
-+				rc = parse_u32(optarg, &sig.raw);
-+				if (rc < 0) {
-+					printe("Invalid CPUID signature value provided to -s.");
-+					return rc;
-+				}
-+				flags |= FLAG_CPUID_SIG;
-+			break;
-+
-+			default:
-+				usage(argv[0]);
-+				return EINVAL;
-+		}
-+	} while (opt != -1);
-+
-+	if (optind >= argc) {
-+		printe("Missing path(s) to ACM file(s).");
-+		usage(argv[0]);
-+		return EINVAL;
-+	}
-+
-+	if (!flags || ((flags & fmask) != fmask)) {
-+		if (!access_txt_crs()) {
-+			printe("Cannot access TXT control registers."
-+				" Is module txt loaded?");
-+			return ENOENT;
-+		}
-+
-+		if (!(flags & FLAG_DIDVID)) {
-+			if (read_txt_cr_didvid(&didvid) < 0)
-+				return ENOSYS;
-+		}
-+		if (!(flags & FLAG_FSBIF)) {
-+			if (read_txt_cr_ver_fsbif(&fsbif) < 0)
-+				return ENOSYS;
-+		}
-+		if (!(flags & FLAG_QPIIF)) {
-+			if (read_txt_cr_ver_qpiif(&qpiif) < 0)
-+				return ENOSYS;
-+		}
-+	}
-+
-+	if (!(flags & FLAG_CPUID_SIG))
-+		sig.raw = cpuid_eax(0x1);
-+
-+	if (!(flags & FLAG_MSR_PID)) {
-+		if (!access_msr_devnode()) {
-+			printe("Cannot access MSRs. Is module msr loaded?");
-+			return ENOENT;
-+		}
-+		msr.raw = rdmsr(MSR_IA32_PLATFORM_ID);
-+	}
-+
-+	for (i = optind; i < argc; ++i) {
-+		rc = platform_match_acm(argv[i],
-+					&didvid, &fsbif, &qpiif, &sig, &msr);
-+		if (rc < 0) {
-+			switch (rc) {
-+				case -EINVAL:
-+					printe("Invalid ACM: %s.", argv[i]);
-+					break;
-+				case -ENOSYS:
-+					printe("Could not read platform data."
-+						"You may need to load modules:"
-+						" msr, txt_info.");
-+					return rc;
-+				default:
-+					printe("Error while loading ACM: %s.", strerror(-rc));
-+					return rc;
-+			}
-+		} else if (!rc) {
-+			match = 1;
-+			printf("Platform matches ACM %s.\n", argv[i]);
-+		}
-+	}
-+
-+	return match ? 0 : 1;
-+}
---- /dev/null
-+++ b/pcr-calc/platform.c
-@@ -0,0 +1,106 @@
-+#include <errno.h>
-+#include <string.h>
-+#include <fcntl.h>
-+#include <unistd.h>
-+#include <sys/types.h>
-+#include <stdio.h>
-+#include <stdlib.h>
-+
-+#include "platform.h"
-+
-+#define printe(fmt, ...)         fprintf(stderr, fmt "\n", ##__VA_ARGS__)
-+
-+int read_u32(const char *path, uint32_t *v)
-+{
-+	int fd;
-+	ssize_t rc = 0;
-+	char buf[12] = { 0 };   /* "0xVVVVVVVV\n\0" */
-+	char *end;
-+	unsigned long a;
-+
-+	fd = open(path, O_RDONLY);
-+	if (fd < 0)
-+		return -errno;
-+
-+	rc = read(fd, buf, sizeof (buf));
-+	if (rc < 0) {
-+		rc = -errno;
-+		goto out;
-+	}
-+
-+	a = strtoul(buf, &end, 0);
-+	if (end != (buf + rc - 1)) {
-+		rc = -EINVAL;
-+		goto out;
-+	}
-+
-+	*v = a;
-+
-+out:
-+	close(fd);
-+	return rc;
-+}
-+
-+int read_u64(const char *path, uint64_t *v)
-+{
-+	int fd;
-+	ssize_t rc = 0;
-+	char buf[19] = { 0 };   /* "0xVVVVVVVVVVVVVVVV\n\0" */
-+	char *end;
-+	unsigned long long a;
-+
-+	fd = open(path, O_RDONLY);
-+	if (fd < 0)
-+		return -errno;
-+
-+	rc = read(fd, buf, sizeof (buf));
-+	if (rc < 0) {
-+		rc = -errno;
-+		goto out;
-+	}
-+
-+	a = strtoull(buf, &end, 0);
-+	if (end != (buf + rc - 1)) {
-+		rc = -EINVAL;
-+		goto out;
-+	}
-+
-+	*v = a;
-+
-+out:
-+	close(fd);
-+	return rc;
-+}
-+
-+uint64_t rdmsr(int msr)
-+{
-+	int fd, rc;
-+	uint64_t val;
-+
-+	fd = open(MSR_DEVNODE, O_RDONLY);
-+	if (fd < 0) {
-+		printe("open failed: %s. Is module `msr' loaded?",
-+			strerror(errno));
-+		return -1ULL;
-+	}
-+
-+	rc = lseek(fd, msr, SEEK_SET);
-+	if (rc < 0) {
-+		printe("lseek failed: %s.", strerror(errno));
-+		return -1ULL;
-+	} else if (rc != msr) {
-+		printe("failed to seek msr value in " MSR_DEVNODE ".");
-+		return -1ULL;
-+	}
-+
-+	rc = read(fd, &val, sizeof (val));
-+	if (rc < 0) {
-+		printe("read failed: %s.", strerror(errno));
-+		return -1ULL;
-+	} else if (rc != sizeof (val)) {
-+		printe("failed to read msr value in " MSR_DEVNODE ".");
-+		return -1ULL;
-+	}
-+
-+	return val;
-+}
---- /dev/null
-+++ b/pcr-calc/platform.h
-@@ -0,0 +1,68 @@
-+#ifndef _PLATFORM_H_
-+# define _PLATFORM_H_
-+
-+# include <inttypes.h>
-+# include <unistd.h>
-+
-+/*
-+ * Low-level helpers.
-+ */
-+/* MSR devnode exposed by the Linux msr module. */
-+# define MSR_DEVNODE "/dev/cpu/0/msr"
-+/* See Intel SDM Vol3A 9.11.4. */
-+# define MSR_IA32_PLATFORM_ID    0x17U
-+
-+static inline void __cpuid(unsigned int ax, uint32_t *p)
-+{
-+	asm volatile (
-+		"cpuid"
-+		: "=a" (p[0]), "=b" (p[1]), "=c" (p[2]), "=d" (p[3]) /* outputs */
-+		: "0" (ax)                                           /* inputs */
-+	);
-+}
-+
-+/* Output in EAX of CPUID EAX=1. */
-+typedef union {
-+	uint32_t raw;
-+	struct {
-+		uint32_t step:4;
-+		uint32_t model:4;
-+		uint32_t family:4;
-+		uint32_t type:2;
-+		uint32_t _res0:2;
-+		uint32_t model_ext:4;
-+		uint32_t family_ext:8;
-+		uint32_t _res1:4;
-+	};
-+} cpuid_proc_sig_eax_t;
-+
-+/* RDMDR 0x17: IA32_PLATFORM_ID. */
-+typedef union {
-+	uint64_t raw;
-+	struct {
-+		uint64_t _res0:50;
-+		uint32_t id:3;
-+		uint32_t _res1:11;
-+	};
-+} msr_ia32_platform_id_t;
-+
-+static inline uint32_t cpuid_eax(unsigned int op)
-+{
-+	uint32_t regs[4] = { 0 };
-+
-+	__cpuid(op, regs);
-+
-+	return regs[0];
-+}
-+
-+static inline int access_msr_devnode(void)
-+{
-+	return !access(MSR_DEVNODE, R_OK);
-+}
-+
-+int read_u32(const char *path, uint32_t *v);
-+int read_u64(const char *path, uint64_t *v);
-+uint64_t rdmsr(int msr);
-+
-+#endif /* !_PLATFORM_H_ */
-+
---- /dev/null
-+++ b/pcr-calc/txt.h
-@@ -0,0 +1,51 @@
-+#ifndef _TXT_H_
-+# define _TXT_H_
-+
-+# include <inttypes.h>
-+# include <unistd.h>
-+
-+# define TXT_INFO_SYSFS "/sys/devices/platform/txt/"
-+
-+typedef union {
-+	uint64_t raw;
-+	struct {
-+		uint16_t vid    : 16;
-+		uint16_t did    : 16;
-+		uint16_t rid    : 16;
-+		uint16_t ext    : 16;
-+	};
-+} txt_cr_didvid_t;
-+
-+typedef union {
-+	uint32_t raw;
-+	struct {
-+		uint32_t _res   : 31;
-+		uint8_t debug   : 1;
-+	};
-+} txt_cr_ver_fsbif_t;
-+
-+typedef union {
-+	uint32_t raw;
-+	struct {
-+		uint32_t _res   : 31;
-+		uint8_t debug   : 1;
-+	};
-+} txt_cr_ver_qpiif_t;
-+
-+# define DECLARE_READ_TXT(entry, size)                          \
-+	static inline int read_txt_cr_##entry(txt_cr_##entry##_t *e)    \
-+{                                                               \
-+	return read_##size(TXT_INFO_SYSFS #entry, &e->raw);         \
-+}
-+DECLARE_READ_TXT(didvid, u64);
-+DECLARE_READ_TXT(ver_fsbif, u32);
-+DECLARE_READ_TXT(ver_qpiif, u32);
-+
-+static inline int access_txt_crs(void)
-+{
-+	return !access(TXT_INFO_SYSFS "didvid", R_OK) &&
-+		!access(TXT_INFO_SYSFS "ver_fsbif", R_OK) &&
-+		!access(TXT_INFO_SYSFS "ver_qpiif", R_OK);
-+}
-+
-+#endif /* _TXT_H_ */
---- /dev/null
-+++ b/pcr-calc/eventlog_tcg.h
-@@ -0,0 +1,86 @@
-+#ifndef _EVENTLOG_TCG_H_
-+# define _EVENTLOG_TCG_H_
-+
-+# include <stdint.h>
-+
-+/*
-+ * To match with specification definition:
-+ *
-+ * struct tdTCG_EfiSpecIDEventStruct {
-+ *     TCG_EfiSpecIdEventStructHeader hdr;
-+ *     TCG_EfiSpecIdEventAlgorithmSizes algs;
-+ *     TCG_EfiSpecIdEventVendorInfo vinfo
-+ * } TCG_EfiSpecIDEventStruct;
-+ *
-+ * This makes it easier to parse/print the different components with dynamic
-+ * sizes.
-+ */
-+
-+typedef struct tdTCG_EfiSpecIdEventStructHeader {
-+	uint8_t signature[16];
-+	uint32_t platformClass;
-+	uint8_t specVersionMinor;
-+	uint8_t specVersionMajor;
-+	uint8_t specErrata;
-+	uint8_t uintnSize;
-+}__attribute__((packed)) TCG_EfiSpecIdEventStructHeader;
-+
-+typedef struct tdTCG_EfiSpecIdEventAlgorithmSize {
-+	uint16_t algorithmId;
-+	uint16_t digestSize;
-+}__attribute__((packed)) TCG_EfiSpecIdEventAlgorithmSize;
-+
-+typedef struct tdTCG_EfiSpecIdEventAlgorithmSizes {
-+	uint32_t numberOfAlgorithms;
-+	TCG_EfiSpecIdEventAlgorithmSize digestSizes[];
-+}__attribute__((packed)) TCG_EfiSpecIdEventAlgorithmSizes;
-+
-+typedef struct tdTCG_EfiSpecIdEventVendorInfo {
-+	uint8_t vendorInfoSize;
-+	uint8_t vendorInfo[];
-+}__attribute__((packed)) TCG_EfiSpecIdEventVendorInfo;
-+
-+/*
-+ * SHA1 Event Log Entry Format.
-+ */
-+typedef struct tdTCG_PCR_EVENT {
-+#define PCR_INDEX_HEADER    0x0
-+	uint32_t PCRIndex;
-+#define EV_NO_ACTION    0x3
-+	uint32_t EventType;
-+	uint8_t Digest[20];
-+	uint32_t EventSize;
-+	uint8_t Event[];
-+}__attribute__((packed)) TCG_PCR_EVENT;
-+
-+/*
-+ * Crypto Agile Log Entry Format.
-+ *
-+ * typedef struct tdTCG_PCR_EVENT2 {
-+ *     TCG_PCR_EVENT2_HDR hdr;
-+ *     TPML_DIGEST_VALUES digests;
-+ *     TCG_PCR_EVENT2_EVT event;
-+ * } TCG_PCR_EVENT2;
-+ */
-+typedef struct tdTCG_PCR_EVENT2_HDR {
-+	uint32_t PCRIndex;
-+	uint32_t EventType;
-+}__attribute__((packed)) TCG_PCR_EVENT2_HDR;
-+
-+typedef struct tdTPMT_HA {
-+	uint16_t AlgorithmId;
-+	uint8_t Digest[];
-+}__attribute__((packed)) TPMT_HA;
-+
-+typedef struct tdTPML_DIGEST_VALUES {
-+	uint32_t Count;
-+	TPMT_HA Digests[];
-+}__attribute__((packed)) TPML_DIGEST_VALUES;
-+
-+typedef struct tdTCG_PCR_EVENT2_EVT {
-+	uint32_t EventSize;
-+	uint8_t Event[];
-+}__attribute__((packed)) TCG_PCR_EVENT2_EVT;
-+
-+#endif /* !_EVENTLOG_TCG_H_ */
-+
---- /dev/null
-+++ b/pcr-calc/tboot.h
-@@ -0,0 +1,10 @@
-+#ifndef _TBOOT_H_
-+# define _TBOOT_H_
-+
-+typedef enum {
-+	TB_196,
-+	TB_199,
-+} tb_version_t;
-+
-+#endif /* !_TBOOT_H_ */
-+
+-- 
+2.25.1
+
