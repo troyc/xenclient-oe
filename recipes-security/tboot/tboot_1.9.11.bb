@@ -13,7 +13,6 @@ SRC_URI = " \
     file://0004-tboot-TB_POLTYPE_WARN_ON_FAILURE-with-pre-post.patch \
     file://0005-tboot-Mark-TPM-region-reserved-if-not-already.patch \
     file://0006-pcr-calc-Add-pcr-calculator-tool.patch \
-    file://0007-tb-polgen-TPM2.0-support.patch \
     file://0008-tboot-Use-SHA256-by-default-with-TPM2.0.patch \
     file://0009-tpm2.0-Perform-orderly-shutdown.patch \
     file://0010-tboot-Export-TPM-event-log-to-VMM-Kernel.patch \
