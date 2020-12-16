@@ -128,10 +128,10 @@ Index: tboot-1.10.0/tboot/txt/verify.c
  }
  
  tb_error_t txt_post_launch_verify_platform(void)
-Index: tboot-1.10.0/deprecated/lcptools/readpol.c
+Index: tboot-1.10.0/lcptools/readpol.c
 ===================================================================
---- tboot-1.10.0.orig/deprecated/lcptools/readpol.c
-+++ tboot-1.10.0/deprecated/lcptools/readpol.c
+--- tboot-1.10.0.orig/lcptools/readpol.c
++++ tboot-1.10.0/lcptools/readpol.c
 @@ -147,6 +147,8 @@ static void print_policy(unsigned char*
                                        "LCP_POLTYPE_UNSIGNED",
                                        "LCP_POLTYPE_SIGNED", "LCP_POLTYPE_ANY",

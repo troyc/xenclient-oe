@@ -6,7 +6,7 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=b86c2f3e88dffdbc026c71e2a818c70c"
 S = "${WORKDIR}/${PN}-${PV}"
 
 SRC_URI = " \
-    https://downloads.sourceforge.net/project/${BPN}/${BPN}/${BPN}-${PV}.tar.gz \
+    file://tboot-1.10.0.tar.gz \
     file://0003-tboot-Propagate-failure-to-map_tboot_pages.patch \
     file://0004-tboot-TB_POLTYPE_WARN_ON_FAILURE-with-pre-post.patch \
     file://0005-tboot-Mark-TPM-region-reserved-if-not-already.patch \
