@@ -7,7 +7,6 @@ S = "${WORKDIR}/${PN}-${PV}"
 
 SRC_URI = " \
     https://downloads.sourceforge.net/project/${BPN}/${BPN}/${BPN}-${PV}.tar.gz \
-    file://0001-config-Allow-build-system-integration.patch \
     file://0002-grub2-Adjust-module-placement-locations-when-changin.patch \
     file://0003-tboot-Propagate-failure-to-map_tboot_pages.patch \
     file://0004-tboot-TB_POLTYPE_WARN_ON_FAILURE-with-pre-post.patch \
@@ -18,7 +17,6 @@ SRC_URI = " \
     file://0010-tboot-Export-TPM-event-log-to-VMM-Kernel.patch \
     file://0012-Find-e820-regions-that-include-the-limit.patch \
     file://0013-Add-support-for-launching-64-bit-PE-kernels.patch \
-    file://0014-safestringlib-Attend-GCC-warnings.patch \
     file://gcc9.patch \
 "
 
