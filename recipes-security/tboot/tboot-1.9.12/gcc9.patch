@@ -1,6 +1,8 @@
---- a/tboot/common/cmdline.c
-+++ b/tboot/common/cmdline.c
-@@ -307,10 +307,12 @@ static bool parse_pci_bdf(const char **b
+Index: tboot-1.9.12/tboot/common/cmdline.c
+===================================================================
+--- tboot-1.9.12.orig/tboot/common/cmdline.c
++++ tboot-1.9.12/tboot/common/cmdline.c
+@@ -308,10 +308,12 @@ static bool parse_pci_bdf(const char **b
  bool g_psbdf_enabled = false;
  static bool parse_com_psbdf(const char **bdf)
  {
@@ -17,7 +19,7 @@
  
      return g_psbdf_enabled;
  }
-@@ -318,10 +320,12 @@ static bool parse_com_psbdf(const char *
+@@ -319,10 +321,12 @@ static bool parse_com_psbdf(const char *
  bool g_pbbdf_enabled = false;
  static bool parse_com_pbbdf(const char **bdf)
  {
@@ -34,9 +36,28 @@
  
      return g_pbbdf_enabled;
  }
---- a/tboot/common/acpi.c
-+++ b/tboot/common/acpi.c
-@@ -183,12 +183,11 @@ static struct acpi_table_header *find_ta
+@@ -577,14 +581,14 @@ bool get_tboot_save_vtd(void)
+ }
+ 
+ bool get_tboot_dump_memmap(void)
+-{
++{/*
+     const char *dump_memmap =
+        get_option_val(g_tboot_cmdline_options,
+               g_tboot_param_values,
+               "dump_memmap");
+     if ( dump_memmap != NULL && tb_strcmp(dump_memmap, "true") == 0 )
+        return true;
+-    return false;
++    return false;*/ return true;//AXA for testing
+ }
+ 
+ /*
+Index: tboot-1.9.12/tboot/common/acpi.c
+===================================================================
+--- tboot-1.9.12.orig/tboot/common/acpi.c
++++ tboot-1.9.12/tboot/common/acpi.c
+@@ -181,12 +181,11 @@ static struct acpi_table_header *find_ta
      struct acpi_table_header *table = NULL;
      struct acpi_xsdt *xsdt = get_xsdt(); /* it is ok even on 1.0 tables */
                                           /* because value will be ignored */
@@ -52,7 +73,7 @@
              if ( tb_memcmp(table->signature, table_name,
                          sizeof(table->signature)) == 0 )
                  return table;
-@@ -202,10 +201,8 @@ static struct acpi_table_header *find_ta
+@@ -200,10 +199,8 @@ static struct acpi_table_header *find_ta
              return NULL;
          }
  
@@ -65,9 +86,11 @@
              if ( tb_memcmp(table->signature, table_name,
                          sizeof(table->signature)) == 0 )
                  return table;
---- a/tboot/common/tboot.c
-+++ b/tboot/common/tboot.c
-@@ -271,8 +271,12 @@ static void post_launch(void)
+Index: tboot-1.9.12/tboot/common/tboot.c
+===================================================================
+--- tboot-1.9.12.orig/tboot/common/tboot.c
++++ tboot-1.9.12/tboot/common/tboot.c
+@@ -276,8 +276,12 @@ static void post_launch(void)
      /*
       * export tpm event log
       */
@@ -82,7 +105,7 @@
  
      /* replace map in loader context with copy */
      replace_e820_map(g_ldr_ctx);
-@@ -579,7 +583,9 @@ void shutdown(void)
+@@ -599,7 +603,9 @@ void shutdown(void)
  {
      struct tpm_if *tpm = get_tpm();
      const struct tpm_if_fp *tpm_fp = get_tpm_fp();
@@ -93,7 +116,7 @@
      /* wait-for-sipi only invoked for APs, so skip all BSP shutdown code */
      if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_WFS ) {
          atomic_inc(&ap_wfs_count);
-@@ -594,7 +600,7 @@ void shutdown(void)
+@@ -614,7 +620,7 @@ void shutdown(void)
      }
  
      printk(TBOOT_INFO"wait until all APs ready for txt shutdown\n");
@@ -102,9 +125,11 @@
             < atomic_read(&ap_wfs_count) )
          cpu_relax();
  
---- a/tboot/txt/verify.c
-+++ b/tboot/txt/verify.c
-@@ -400,9 +400,11 @@ tb_error_t txt_verify_platform(void)
+Index: tboot-1.9.12/tboot/txt/verify.c
+===================================================================
+--- tboot-1.9.12.orig/tboot/txt/verify.c
++++ tboot-1.9.12/tboot/txt/verify.c
+@@ -408,9 +408,11 @@ tb_error_t txt_verify_platform(void)
  static bool verify_saved_mtrrs(txt_heap_t *txt_heap)
  {
      os_mle_data_t *os_mle_data;
@@ -117,8 +142,10 @@
  }
  
  tb_error_t txt_post_launch_verify_platform(void)
---- a/lcptools/readpol.c
-+++ b/lcptools/readpol.c
+Index: tboot-1.9.12/lcptools/readpol.c
+===================================================================
+--- tboot-1.9.12.orig/lcptools/readpol.c
++++ tboot-1.9.12/lcptools/readpol.c
 @@ -147,6 +147,8 @@ static void print_policy(unsigned char*
                                        "LCP_POLTYPE_UNSIGNED",
                                        "LCP_POLTYPE_SIGNED", "LCP_POLTYPE_ANY",
@@ -144,8 +171,10 @@
      lcp_unloaddata(sizeof(pol.policy_hash.sha1), &pdata,
  		   (unsigned char *)&pol.policy_hash);
  
---- a/safestringlib/safeclib/mem_primitives_lib.c
-+++ b/safestringlib/safeclib/mem_primitives_lib.c
+Index: tboot-1.9.12/safestringlib/safeclib/mem_primitives_lib.c
+===================================================================
+--- tboot-1.9.12.orig/safestringlib/safeclib/mem_primitives_lib.c
++++ tboot-1.9.12/safestringlib/safeclib/mem_primitives_lib.c
 @@ -108,21 +108,21 @@ mem_prim_set (void *dest, uint32_t len,
              lcount -= 16;
              break;
@@ -479,9 +508,11 @@
              case 1:  *--dp = *--sp;
                  len = 0;
                  break;
---- a/tboot/txt/txt.c
-+++ b/tboot/txt/txt.c
-@@ -992,7 +992,9 @@ tb_error_t txt_launch_environment(loader
+Index: tboot-1.9.12/tboot/txt/txt.c
+===================================================================
+--- tboot-1.9.12.orig/tboot/txt/txt.c
++++ tboot-1.9.12/tboot/txt/txt.c
+@@ -1032,7 +1032,9 @@ tb_error_t txt_launch_environment(loader
  
      /* save MTRRs before we alter them for SINIT launch */
      os_mle_data = get_os_mle_data_start(txt_heap);
@@ -492,7 +523,7 @@
  
      /* set MTRRs properly for AC module (SINIT); if this fails the MTRRs may
         not be in a good state to continue a launch, so return TB_ERR_FATAL */
-@@ -1241,7 +1243,8 @@ void txt_post_launch(void)
+@@ -1272,7 +1274,8 @@ void txt_post_launch(void)
      }
  
      /* restore pre-SENTER MTRRs that were overwritten for SINIT launch */
@@ -502,7 +533,7 @@
  
      /* now, if there was an error, apply policy */
      apply_policy(err);
-@@ -1272,8 +1275,10 @@ void ap_wait(unsigned int cpuid)
+@@ -1303,8 +1306,10 @@ void ap_wait(unsigned int cpuid)
      misc |= MSR_IA32_MISC_ENABLE_MONITOR_FSM;
      wrmsr(MSR_IA32_MISC_ENABLE, misc);
  
@@ -514,7 +545,7 @@
      mtx_leave(&ap_lock);
  
      printk(TBOOT_INFO"cpu %u mwait'ing\n", cpuid);
-@@ -1287,7 +1292,7 @@ void ap_wait(unsigned int cpuid)
+@@ -1318,7 +1323,7 @@ void ap_wait(unsigned int cpuid)
  
      uint32_t sipi_vec = (uint32_t)_tboot_shared.ap_wake_addr;
      atomic_dec(&ap_wfs_count);
@@ -523,7 +554,7 @@
      cpu_wakeup(cpuid, sipi_vec);
  }
  
-@@ -1325,7 +1330,8 @@ void txt_cpu_wakeup(void)
+@@ -1356,7 +1361,8 @@ void txt_cpu_wakeup(void)
      os_mle_data = get_os_mle_data_start(txt_heap);
  
      /* apply (validated) (pre-SENTER) MTRRs from BSP to each AP */
@@ -533,8 +564,10 @@
  
      /* restore pre-SENTER IA32_MISC_ENABLE_MSR */
      wrmsr(MSR_IA32_MISC_ENABLE, os_mle_data->saved_misc_enable_msr);
---- a/tboot/txt/vmcs.c
-+++ b/tboot/txt/vmcs.c
+Index: tboot-1.9.12/tboot/txt/vmcs.c
+===================================================================
+--- tboot-1.9.12.orig/tboot/txt/vmcs.c
++++ tboot-1.9.12/tboot/txt/vmcs.c
 @@ -441,17 +441,19 @@ static bool vmx_create_vmcs(unsigned int
  static void launch_mini_guest(unsigned int cpuid)
  {
