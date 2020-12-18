@@ -261,7 +261,7 @@ Index: git/xen/arch/x86/efi/efi-boot.h
 +    efi_mmap_tag = mbi2_add_entry(sizeof(*efi_mmap_tag) + efi_memmap_size);
 +    efi_mmap_tag->type = MULTIBOOT2_TAG_TYPE_EFI_MMAP;
 +    efi_mmap_tag->descr_size = efi_mdesc_size;
-+    efi_mmap_tag->descr_vers = 1; //AXA todo fix
++    efi_mmap_tag->descr_vers = mdesc_ver;
 +    memcpy(efi_mmap_tag->efi_mmap, efi_memmap - DIRECTMAP_VIRT_START, efi_memmap_size);
 +
 +    /* Empty */
@@ -925,7 +925,15 @@ Index: git/xen/common/efi/boot.c
 ===================================================================
 --- git.orig/xen/common/efi/boot.c
 +++ git/xen/common/efi/boot.c
-@@ -630,7 +630,7 @@ static bool __init read_file(EFI_FILE_HA
+@@ -154,7 +154,6 @@ static EFI_HANDLE __initdata efi_ih;
+ static SIMPLE_TEXT_OUTPUT_INTERFACE *__initdata StdOut;
+ static SIMPLE_TEXT_OUTPUT_INTERFACE *__initdata StdErr;
+ 
+-static UINT32 __initdata mdesc_ver;
+ static bool __initdata map_bs;
+ 
+ static struct file __initdata cfg;
+@@ -630,7 +629,7 @@ static bool __init read_file(EFI_FILE_HA
          what = what ?: L"Seek";
      else
      {
@@ -934,7 +942,7 @@ Index: git/xen/common/efi/boot.c
                           HYPERVISOR_VIRT_END - DIRECTMAP_VIRT_START);
          ret = efi_bs->AllocatePages(AllocateMaxAddress, EfiLoaderData,
                                      PFN_UP(size), &file->addr);
-@@ -742,6 +742,7 @@ static char *__init get_value(const stru
+@@ -742,6 +741,7 @@ static char *__init get_value(const stru
  
  static void __init efi_init(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
  {
@@ -942,7 +950,7 @@ Index: git/xen/common/efi/boot.c
      efi_ih = ImageHandle;
      efi_bs = SystemTable->BootServices;
      efi_bs_revision = efi_bs->Hdr.Revision;
-@@ -1148,6 +1149,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1148,6 +1148,8 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
      __set_bit(EFI_RS, &efi_flags);
  #endif
  
@@ -951,7 +959,7 @@ Index: git/xen/common/efi/boot.c
      efi_init(ImageHandle, SystemTable);
  
      use_cfg_file = efi_arch_use_config_file(SystemTable);
-@@ -1238,6 +1241,13 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1238,6 +1240,13 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
          /* Get the file system interface. */
          dir_handle = get_parent_handle(loaded_image, &file_name);
  
@@ -965,7 +973,7 @@ Index: git/xen/common/efi/boot.c
          /* Read and parse the config file. */
          if ( !cfg_file_name )
          {
-@@ -1382,7 +1392,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
+@@ -1382,7 +1391,7 @@ efi_start(EFI_HANDLE ImageHandle, EFI_SY
              }
          }
  
@@ -1088,7 +1096,15 @@ Index: git/xen/common/efi/runtime.c
 ===================================================================
 --- git.orig/xen/common/efi/runtime.c
 +++ git/xen/common/efi/runtime.c
-@@ -68,6 +68,7 @@ struct efi __read_mostly efi = {
+@@ -50,6 +50,7 @@ static unsigned int efi_rs_on_cpu = NR_C
+ 
+ UINTN __read_mostly efi_memmap_size;
+ UINTN __read_mostly efi_mdesc_size;
++UINT32 __read_mostly mdesc_ver;
+ void *__read_mostly efi_memmap;
+ 
+ UINT64 __read_mostly efi_boot_max_var_store_size;
+@@ -68,6 +69,7 @@ struct efi __read_mostly efi = {
  	.mps    = EFI_INVALID_TABLE_ADDR,
  	.smbios = EFI_INVALID_TABLE_ADDR,
  	.smbios3 = EFI_INVALID_TABLE_ADDR,
@@ -1115,3 +1131,15 @@ Index: git/xen/include/xen/multiboot2.h
      u64 pointer;
  } multiboot2_tag_efi64_t;
  
+Index: git/xen/common/efi/efi.h
+===================================================================
+--- git.orig/xen/common/efi/efi.h
++++ git/xen/common/efi/efi.h
+@@ -26,6 +26,7 @@ extern const CHAR16 *efi_fw_vendor;
+ extern const EFI_RUNTIME_SERVICES *efi_rs;
+ 
+ extern UINTN efi_memmap_size, efi_mdesc_size;
++extern UINT32 mdesc_ver;
+ extern void *efi_memmap;
+ 
+ #ifdef CONFIG_X86
