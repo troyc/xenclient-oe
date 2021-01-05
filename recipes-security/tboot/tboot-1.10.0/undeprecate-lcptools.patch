@@ -1,0 +1,13 @@
+Index: tboot-1.10.0/Makefile
+===================================================================
+--- tboot-1.10.0.orig/Makefile
++++ tboot-1.10.0/Makefile
+@@ -14,7 +14,7 @@ export ROOTDIR=$(CURDIR)
+ include Config.mk
+ 
+ # (txt-test is not included because it requires pathing to Linux src)
+-SUBDIRS := tboot safestringlib lcptools-v2 tb_polgen utils pcr-calc docs
++SUBDIRS := tboot safestringlib lcptools lcptools-v2 tb_polgen utils pcr-calc docs
+ 
+ #
+ # build rules

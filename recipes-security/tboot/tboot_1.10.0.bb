@@ -18,12 +18,18 @@ SRC_URI = " \
     file://0012-Find-e820-regions-that-include-the-limit.patch \
     file://0013-Add-support-for-launching-64-bit-PE-kernels.patch \
     file://gcc9.patch \
+    file://undeprecate-lcptools.patch \
 "
 
 SRC_URI[md5sum] = "0922c78db8ca25f610d5cec143319e9a"
 SRC_URI[sha256sum] = "3c8c411e672b0d07c42a07435b0f56d8a6e3345801cd3012fa6e8d906dc2923b"
 
 inherit deploy
+
+do_undeprecate_lcptools() {
+    cp -r "${S}/deprecated/lcptools" "${S}/lcptools"
+}
+addtask do_undeprecate_lcptools after do_unpack before do_patch
 
 do_compile() {
     oe_runmake SUBDIRS="tboot" CC="${HOST_PREFIX}gcc ${TOOLCHAIN_OPTIONS}" CPP="${HOST_PREFIX}cpp ${TOOLCHAIN_OPTIONS}"
