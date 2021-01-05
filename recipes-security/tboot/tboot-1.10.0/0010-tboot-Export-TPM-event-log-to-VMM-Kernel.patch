@@ -15,10 +15,10 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
  tboot/txt/txt.c         | 129 ++++++++++++++++++++++++++++++++++++++++
  4 files changed, 154 insertions(+)
 
-Index: tboot-1.9.12/include/tboot.h
+Index: tboot-1.10.0/include/tboot.h
 ===================================================================
---- tboot-1.9.12.orig/include/tboot.h
-+++ tboot-1.9.12/include/tboot.h
+--- tboot-1.10.0.orig/include/tboot.h
++++ tboot-1.10.0/include/tboot.h
 @@ -109,6 +109,14 @@ typedef struct __packed {
      uint32_t  flags;
      uint64_t  ap_wake_addr;      /* phys addr of kernel/VMM SIPI vector */
@@ -39,19 +39,23 @@ Index: tboot-1.9.12/include/tboot.h
  }
  
 +#if __WORDSIZE == 64
-+# define __PRI64_PREFIX	"l"
-+# define __PRIPTR_PREFIX	"l"
++# define __PRI64_PREFIX        "l"
++# define __PRIPTR_PREFIX       "l"
 +#else
-+# define __PRI64_PREFIX	"ll"
++# define __PRI64_PREFIX        "ll"
 +# define __PRIPTR_PREFIX
 +#endif
-+#define PRIu64		__PRI64_PREFIX "u"
-+#define PRIx64		__PRI64_PREFIX "x"
++#define PRIu64         __PRI64_PREFIX "u"
++#define PRIx64         __PRI64_PREFIX "x"
 +
- static inline void print_tboot_shared(const tboot_shared_t *tboot_shared)
- {
-     printk(TBOOT_DETA"tboot_shared data:\n");
-@@ -163,6 +181,9 @@ static inline void print_tboot_shared(co
+ #endif    /* __TBOOT_H__ */
+ 
+ /*
+Index: tboot-1.10.0/tboot/common/tboot.c
+===================================================================
+--- tboot-1.10.0.orig/tboot/common/tboot.c
++++ tboot-1.10.0/tboot/common/tboot.c
+@@ -167,6 +167,9 @@ static inline void print_tboot_shared(co
      printk(TBOOT_DETA"\t flags: 0x%8.8x\n", tboot_shared->flags);
      printk(TBOOT_DETA"\t ap_wake_addr: 0x%08x\n", (uint32_t)tboot_shared->ap_wake_addr);
      printk(TBOOT_DETA"\t ap_wake_trigger: %u\n", tboot_shared->ap_wake_trigger);
@@ -60,12 +64,8 @@ Index: tboot-1.9.12/include/tboot.h
 +    printk(TBOOT_DETA"\t evt_log_format: 0x%02x\n", tboot_shared->evt_log_format);
  }
  
- #endif    /* __TBOOT_H__ */
-Index: tboot-1.9.12/tboot/common/tboot.c
-===================================================================
---- tboot-1.9.12.orig/tboot/common/tboot.c
-+++ tboot-1.9.12/tboot/common/tboot.c
-@@ -220,6 +220,15 @@ static void post_launch(void)
+ static void post_launch(void)
+@@ -235,6 +238,15 @@ static void post_launch(void)
          apply_policy(TB_ERR_FATAL);
      }
  
@@ -81,7 +81,7 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      /*
       * verify modules against policy
       */
-@@ -264,6 +273,18 @@ static void post_launch(void)
+@@ -279,6 +291,18 @@ static void post_launch(void)
          printk(TBOOT_ERR"ap_wake_mwait specified but the CPU doesn't support it.\n");
      }
  
@@ -100,10 +100,10 @@ Index: tboot-1.9.12/tboot/common/tboot.c
      print_tboot_shared(&_tboot_shared);
  
      launch_kernel(true);
-Index: tboot-1.9.12/tboot/include/txt/txt.h
+Index: tboot-1.10.0/tboot/include/txt/txt.h
 ===================================================================
---- tboot-1.9.12.orig/tboot/include/txt/txt.h
-+++ tboot-1.9.12/tboot/include/txt/txt.h
+--- tboot-1.10.0.orig/tboot/include/txt/txt.h
++++ tboot-1.10.0/tboot/include/txt/txt.h
 @@ -62,6 +62,7 @@ extern void txt_shutdown(void);
  extern bool txt_is_powercycle_required(void);
  extern void ap_wait(unsigned int cpuid);
@@ -112,11 +112,11 @@ Index: tboot-1.9.12/tboot/include/txt/txt.h
  
  extern uint32_t g_using_da;
  #endif      /* __TXT_TXT_H__ */
-Index: tboot-1.9.12/tboot/txt/txt.c
+Index: tboot-1.10.0/tboot/txt/txt.c
 ===================================================================
---- tboot-1.9.12.orig/tboot/txt/txt.c
-+++ tboot-1.9.12/tboot/txt/txt.c
-@@ -374,6 +374,43 @@ bool evtlog_append_tpm12(uint8_t pcr, tb
+--- tboot-1.10.0.orig/tboot/txt/txt.c
++++ tboot-1.10.0/tboot/txt/txt.c
+@@ -376,6 +376,43 @@ bool evtlog_append_tpm12(uint8_t pcr, tb
      return true;
  }
  
@@ -160,17 +160,17 @@ Index: tboot-1.9.12/tboot/txt/txt.c
  void dump_event_2(void)
  {
      heap_event_log_descr_t *log_descr;
-@@ -479,8 +516,7 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr,
+@@ -481,8 +518,7 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr,
          return false;
      }
  
--    event = (tcg_pcr_event2*)(void *)(unsigned long)g_elog_2_1->phys_addr +
--        g_elog_2_1->next_record_offset;
+-    event = (tcg_pcr_event2*)(void *)(unsigned long)(g_elog_2_1->phys_addr +
+-        g_elog_2_1->next_record_offset);
 +    event = (tcg_pcr_event2*)(uintptr_t)(g_elog_2_1->phys_addr + g_elog_2_1->next_record_offset);
      event->pcr_index = pcr;
      event->event_type = type;
      event->event_size = 0;  // No event data passed by tboot.
-@@ -501,6 +537,121 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr,
+@@ -503,6 +539,121 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr,
      return true;
  }
  
@@ -292,7 +292,7 @@ Index: tboot-1.9.12/tboot/txt/txt.c
  bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
  {
      int log_type = get_evtlog_type();
-@@ -527,6 +678,28 @@ bool evtlog_append(uint8_t pcr, hash_lis
+@@ -529,6 +680,28 @@ bool evtlog_append(uint8_t pcr, hash_lis
      return true;
  }
  

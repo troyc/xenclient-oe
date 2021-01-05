@@ -12,32 +12,28 @@ Signed-off-by: Chris Rogers <rogersc@ainfosec.com>
  tboot/include/tpm.h   |  3 ++-
  3 files changed, 26 insertions(+), 2 deletions(-)
 
-diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 348dc0d..ed7397f 100644
---- a/tboot/common/tboot.c
-+++ b/tboot/common/tboot.c
-@@ -629,8 +629,15 @@ void shutdown(void)
-         /* have TPM save static PCRs (in case VMM/kernel didn't) */
-         /* per TCG spec, TPM can invalidate saved state if any other TPM
-            operation is performed afterwards--so do this last */
--        if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_S3 )
-+        if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_S3 ) {
-             tpm_fp->save_state(tpm, tpm->cur_loc);
+Index: tboot-1.10.0/tboot/common/tboot.c
+===================================================================
+--- tboot-1.10.0.orig/tboot/common/tboot.c
++++ tboot-1.10.0/tboot/common/tboot.c
+@@ -680,6 +680,12 @@ void shutdown(void)
+             if (tpm_fp->save_state(tpm, tpm->cur_loc) != 0) {
+                 printk(TBOOT_ERR"failed to save TPM state\n");
+             }
 +        } else if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_REBOOT ||
 +                   _tboot_shared.shutdown_type == TB_SHUTDOWN_HALT ||
 +                   _tboot_shared.shutdown_type == TB_SHUTDOWN_S5) {
-+           if(tpm->major == TPM20_VER_MAJOR){
-+               tpm_fp->shutdown(tpm, tpm->cur_loc);
-+           }
-+        }
++            if(tpm->major == TPM20_VER_MAJOR) {
++                tpm_fp->shutdown(tpm, tpm->cur_loc);
++            }
+         }
  
          /* scrub any secrets by clearing their memory, then flush cache */
-         /* we don't have any secrets to scrub, however */
-diff --git a/tboot/common/tpm_20.c b/tboot/common/tpm_20.c
-index 5afdaf7..290ac30 100644
---- a/tboot/common/tpm_20.c
-+++ b/tboot/common/tpm_20.c
-@@ -2561,6 +2561,21 @@ static bool tpm20_get_random(struct tpm_if *ti, uint32_t locality,
+Index: tboot-1.10.0/tboot/common/tpm_20.c
+===================================================================
+--- tboot-1.10.0.orig/tboot/common/tpm_20.c
++++ tboot-1.10.0/tboot/common/tpm_20.c
+@@ -2581,6 +2581,21 @@ static bool tpm20_get_random(struct tpm_
      return true;
  }
  
@@ -59,7 +55,7 @@ index 5afdaf7..290ac30 100644
  static uint32_t tpm20_save_state(struct tpm_if *ti, uint32_t locality)
  {
      u32 ret;
-@@ -2847,6 +2862,7 @@ const struct tpm_if_fp tpm_20_if_fp = {
+@@ -2867,6 +2882,7 @@ const struct tpm_if_fp tpm_20_if_fp = {
      .verify_creation = tpm20_verify_creation,
      .get_random = tpm20_get_random,
      .save_state = tpm20_save_state,
@@ -67,11 +63,11 @@ index 5afdaf7..290ac30 100644
      .cap_pcrs = tpm20_cap_pcrs,
      .context_save = tpm20_context_save,
      .context_load = tpm20_context_load,
-diff --git a/tboot/include/tpm.h b/tboot/include/tpm.h
-index 4cd9b25..ab4a43f 100644
---- a/tboot/include/tpm.h
-+++ b/tboot/include/tpm.h
-@@ -482,7 +482,8 @@ struct tpm_if_fp {
+Index: tboot-1.10.0/tboot/include/tpm.h
+===================================================================
+--- tboot-1.10.0.orig/tboot/include/tpm.h
++++ tboot-1.10.0/tboot/include/tpm.h
+@@ -483,7 +483,8 @@ struct tpm_if_fp {
      bool (*get_random)(struct tpm_if *ti, u32 locality, u8 *random_data, u32 *data_size);
  
      uint32_t (*save_state)(struct tpm_if *ti, u32 locality);
@@ -81,6 +77,3 @@ index 4cd9b25..ab4a43f 100644
      bool (*context_save)(struct tpm_if *ti, u32 locality, u32 handle, void *context_saved);
      bool (*context_load)(struct tpm_if *ti, u32 locality, void *context_saved, u32 *handle);
      bool (*context_flush)(struct tpm_if *ti, u32 locality, u32 handle);
--- 
-2.20.1
-
