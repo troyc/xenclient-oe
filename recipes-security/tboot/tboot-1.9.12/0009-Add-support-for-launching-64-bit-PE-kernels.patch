@@ -1,7 +1,7 @@
-From 59cfd9f0641719ec115a9126ea25b1c549605ec1 Mon Sep 17 00:00:00 2001
+From f6ce865867ddf776cd6759b64e4ae49dadc398f1 Mon Sep 17 00:00:00 2001
 From: Daniel De Graaf <dgdegra@tycho.nsa.gov>
 Date: Tue, 27 Feb 2018 13:10:07 -0500
-Subject: [PATCH 11/12] Add support for launching 64-bit PE kernels
+Subject: [PATCH 9/9] Add support for launching 64-bit PE kernels
 
 This is currently used by xen.efi when booting via EFI. Use
 is_linux_image in is_kernel_linux, otherwise Xen's PV guests
@@ -26,7 +26,7 @@ Signed-off-by: Chris Rogers <rogersc@ainfosec.com>
  create mode 100644 tboot/common/pe.c
 
 diff --git a/tboot/Makefile b/tboot/Makefile
-index 3edab90..085e1fe 100644
+index 4c9fe51..e763a4a 100644
 --- a/tboot/Makefile
 +++ b/tboot/Makefile
 @@ -21,6 +21,7 @@ obj-y += common/policy.o common/printk.o common/rijndael.o common/sha1.o
@@ -38,10 +38,10 @@ index 3edab90..085e1fe 100644
  obj-y += txt/verify.o txt/vmcs.o
  obj-y += common/tpm_12.o common/tpm_20.o 
 diff --git a/tboot/common/linux.c b/tboot/common/linux.c
-index a73bd4a..bd8a5d0 100644
+index ec1ebc9..a78a3e2 100644
 --- a/tboot/common/linux.c
 +++ b/tboot/common/linux.c
-@@ -77,6 +77,43 @@ printk_long(const char *what)
+@@ -78,6 +78,43 @@ printk_long(const char *what)
      }
  }
  
@@ -86,10 +86,10 @@ index a73bd4a..bd8a5d0 100644
  bool expand_linux_image(const void *linux_image, size_t linux_size,
                          const void *initrd_image, size_t initrd_size,
 diff --git a/tboot/common/loader.c b/tboot/common/loader.c
-index 1066a85..e48db92 100644
+index 7f77278..55313df 100644
 --- a/tboot/common/loader.c
 +++ b/tboot/common/loader.c
-@@ -69,10 +69,14 @@ extern loader_ctx *g_ldr_ctx;
+@@ -70,10 +70,14 @@ extern loader_ctx *g_ldr_ctx;
  extern bool get_elf_image_range(const elf_header_t *elf, void **start, void **end);
  extern bool is_elf_image(const void *image, size_t size);
  extern bool expand_elf_image(const elf_header_t *elf, void **entry_point);
@@ -104,7 +104,7 @@ index 1066a85..e48db92 100644
  extern bool jump_linux_image(const void *entry_point);
  extern bool is_sinit_acmod(const void *acmod_base, uint32_t acmod_size, 
                             bool quiet);
-@@ -598,7 +602,7 @@ bool is_kernel_linux(void)
+@@ -599,7 +603,7 @@ bool is_kernel_linux(void)
      void *kernel_image = (void *)m->mod_start;
      size_t kernel_size = m->mod_end - m->mod_start;
  
@@ -113,7 +113,7 @@ index 1066a85..e48db92 100644
  }
  
  static bool 
-@@ -1046,6 +1050,19 @@ void fixup_loader_ctx(loader_ctx *lctx, size_t offset)
+@@ -1051,6 +1055,19 @@ void fixup_loader_ctx(loader_ctx *lctx, size_t offset)
      return;
  }
  
@@ -133,7 +133,7 @@ index 1066a85..e48db92 100644
  static uint32_t get_lowest_mod_start_below_tboot(loader_ctx *lctx)
  {
      uint32_t lowest = 0xffffffff;
-@@ -1359,7 +1376,7 @@ determine_multiboot_type(void *image)
+@@ -1364,7 +1381,7 @@ determine_multiboot_type(void *image)
  
  bool launch_kernel(bool is_measured_launch)
  {
@@ -142,7 +142,7 @@ index 1066a85..e48db92 100644
  
      void *kernel_entry_point;
      uint32_t mb_type = MB_NONE;
-@@ -1446,10 +1463,18 @@ bool launch_kernel(bool is_measured_launch)
+@@ -1457,10 +1474,18 @@ bool launch_kernel(bool is_measured_launch)
          if(!move_modules_to_high_memory(g_ldr_ctx))
              return false;
      }
@@ -163,7 +163,7 @@ index 1066a85..e48db92 100644
  
      /* print_mbi(g_mbi); */
  
-@@ -1480,6 +1505,18 @@ bool launch_kernel(bool is_measured_launch)
+@@ -1491,6 +1516,18 @@ bool launch_kernel(bool is_measured_launch)
                                mb_type == MB1_ONLY ?
                                MB_MAGIC : MB2_LOADER_MAGIC);
      }
@@ -414,7 +414,7 @@ index 0000000..39b8422
 +
 diff --git a/tboot/common/pe.c b/tboot/common/pe.c
 new file mode 100644
-index 0000000..5c2b140
+index 0000000..9a405c6
 --- /dev/null
 +++ b/tboot/common/pe.c
 @@ -0,0 +1,220 @@
@@ -604,7 +604,7 @@ index 0000000..5c2b140
 +
 +    uint32_t limit = get_lowest_mod_start(lctx);
 +
-+    get_highest_sized_ram(image_max + (1 << 21), (u32)limit,
++    e820_get_highest_sized_ram(image_max + (1 << 21), (u32)limit,
 +                          &ram_base, &ram_size);
 +
 +    if ( ram_size < image_max ) {

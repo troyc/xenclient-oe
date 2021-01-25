@@ -1,7 +1,7 @@
-From df070ffb58353d4e75d45e6bba79e32dbd1f1951 Mon Sep 17 00:00:00 2001
+From 90b06ce7f2a52906711e903e96d732ec94ef0d6b Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 13:58:44 -0400
-Subject: [PATCH 08/12] tpm2.0: Perform orderly shutdown.
+Subject: [PATCH 6/9] tpm2.0: Perform orderly shutdown.
 
 Avoid TPM_PT_LOCKOUT_COUNTER being incremented unnecessarily.
 
@@ -13,10 +13,10 @@ Signed-off-by: Chris Rogers <rogersc@ainfosec.com>
  3 files changed, 26 insertions(+), 2 deletions(-)
 
 diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 3b8b514..8f03532 100644
+index 000e9a7..37a2923 100644
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -630,8 +630,15 @@ void shutdown(void)
+@@ -649,8 +649,15 @@ void shutdown(void)
          /* have TPM save static PCRs (in case VMM/kernel didn't) */
          /* per TCG spec, TPM can invalidate saved state if any other TPM
             operation is performed afterwards--so do this last */
@@ -34,10 +34,10 @@ index 3b8b514..8f03532 100644
          /* scrub any secrets by clearing their memory, then flush cache */
          /* we don't have any secrets to scrub, however */
 diff --git a/tboot/common/tpm_20.c b/tboot/common/tpm_20.c
-index 5afdaf7..290ac30 100644
+index aaeb891..3eae219 100644
 --- a/tboot/common/tpm_20.c
 +++ b/tboot/common/tpm_20.c
-@@ -2561,6 +2561,21 @@ static bool tpm20_get_random(struct tpm_if *ti, uint32_t locality,
+@@ -2559,6 +2559,21 @@ static bool tpm20_get_random(struct tpm_if *ti, uint32_t locality,
      return true;
  }
  
@@ -59,7 +59,7 @@ index 5afdaf7..290ac30 100644
  static uint32_t tpm20_save_state(struct tpm_if *ti, uint32_t locality)
  {
      u32 ret;
-@@ -2847,6 +2862,7 @@ const struct tpm_if_fp tpm_20_if_fp = {
+@@ -2845,6 +2860,7 @@ const struct tpm_if_fp tpm_20_if_fp = {
      .verify_creation = tpm20_verify_creation,
      .get_random = tpm20_get_random,
      .save_state = tpm20_save_state,

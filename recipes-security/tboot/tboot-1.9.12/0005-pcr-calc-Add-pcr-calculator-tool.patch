@@ -1,7 +1,7 @@
-From 88486954aa261213e342074e29d76eb77c5218d0 Mon Sep 17 00:00:00 2001
+From 3e8ab6dfa8d2cd3372bfd5463772ac1345da5944 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 12:10:22 -0400
-Subject: [PATCH 06/12] pcr-calc: Add pcr calculator tool.
+Subject: [PATCH 5/9] pcr-calc: Add pcr calculator tool.
 
 Usage:
 module_hash [-hjz] [-e hash_str] -c cmd_line module_file\n

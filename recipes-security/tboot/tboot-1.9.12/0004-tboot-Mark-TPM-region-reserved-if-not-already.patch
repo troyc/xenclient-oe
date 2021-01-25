@@ -1,7 +1,7 @@
-From 877a75fd73c254c9ed10250716f20b050a277231 Mon Sep 17 00:00:00 2001
+From e7b8560c0224a93eeea1f242363386e325cd8929 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 12:02:19 -0400
-Subject: [PATCH 05/12] tboot: Mark TPM region reserved if not already.
+Subject: [PATCH 4/9] tboot: Mark TPM region reserved if not already.
 
 TPM specification defines one region @0xfed40000-0xfed44fff.  Given a
 32bits dom0 with "enough" memory (dom_mem=>4G), it is likely that the
@@ -20,10 +20,10 @@ Signed-off-by: Eric Chanudet <chanudete@ainfosec.com>
  3 files changed, 35 insertions(+)
 
 diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 44425db..3b8b514 100644
+index 342ecbb..000e9a7 100644
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -194,6 +194,9 @@ static void post_launch(void)
+@@ -195,6 +195,9 @@ static void post_launch(void)
      if ( !verify_modules(g_ldr_ctx) )
          apply_policy(TB_ERR_POST_LAUNCH_VERIFICATION);
  
@@ -34,7 +34,7 @@ index 44425db..3b8b514 100644
      base = (uint64_t)TBOOT_BASE_ADDR;
      size = (uint64_t)((unsigned long)&_end - base);
 diff --git a/tboot/common/tpm.c b/tboot/common/tpm.c
-index b325a97..0ad1205 100644
+index 65d4f93..2475f73 100644
 --- a/tboot/common/tpm.c
 +++ b/tboot/common/tpm.c
 @@ -42,6 +42,10 @@
@@ -48,7 +48,7 @@ index b325a97..0ad1205 100644
  #include <tpm.h>
  #include <sha1.h>
  
-@@ -912,6 +916,33 @@ const struct tpm_if_fp *get_tpm_fp(void)
+@@ -913,6 +917,33 @@ const struct tpm_if_fp *get_tpm_fp(void)
      return NULL;
  
  }

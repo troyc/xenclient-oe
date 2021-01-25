@@ -1,7 +1,7 @@
-From c05625cdf5617a61cd82c560051fb22c05a5d339 Mon Sep 17 00:00:00 2001
+From 60b386a06193f781a3cbfae2bed4aaa12193cb2a Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Fri, 10 Aug 2018 17:38:33 -0400
-Subject: [PATCH 03/12] tboot: Propagate failure to map_tboot_pages.
+Subject: [PATCH 2/9] tboot: Propagate failure to map_tboot_pages.
 
 Propagate failure to enable pagination, especially if map_tboot_pages
 failed:

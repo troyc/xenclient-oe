@@ -1,7 +1,7 @@
-From db0a7dd12c93aff03176ceb8e12c3da6317214be Mon Sep 17 00:00:00 2001
+From ce45a1a830d19021afa137e6269e498d209203cd Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 14:02:07 -0400
-Subject: [PATCH 09/12] tboot: Export TPM event log to VMM/Kernel.
+Subject: [PATCH 7/9] tboot: Export TPM event log to VMM/Kernel.
 
 Create a copy of the TPM event log outside of the TXT heap for the Xen
 use case to safe past the log down to a VM (see relevant Xen patch
@@ -62,12 +62,12 @@ index abb1ca4..3bec9e8 100644
  
  #endif    /* __TBOOT_H__ */
 diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 8f03532..e02ee1e 100644
+index 37a2923..d21d9f1 100644
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -216,6 +216,15 @@ static void post_launch(void)
-     if ( !e820_protect_region(base, size, mem_type) )      
+@@ -220,6 +220,15 @@ static void post_launch(void)
          apply_policy(TB_ERR_FATAL);
+     }
  
 +    /* if using memory logging, reserve log area */
 +    if ( g_log_targets & TBOOT_LOG_TARGET_MEMORY ) {
@@ -81,7 +81,7 @@ index 8f03532..e02ee1e 100644
      /*
       * verify modules against policy
       */
-@@ -260,6 +269,18 @@ static void post_launch(void)
+@@ -264,6 +273,18 @@ static void post_launch(void)
          printk(TBOOT_ERR"ap_wake_mwait specified but the CPU doesn't support it.\n");
      }
  
@@ -113,10 +113,10 @@ index 28eb6e3..40ce20a 100644
  extern uint32_t g_using_da;
  #endif      /* __TXT_TXT_H__ */
 diff --git a/tboot/txt/txt.c b/tboot/txt/txt.c
-index fb5a154..addf9f8 100644
+index 0b7c814..f170f0f 100644
 --- a/tboot/txt/txt.c
 +++ b/tboot/txt/txt.c
-@@ -373,6 +373,43 @@ bool evtlog_append_tpm12(uint8_t pcr, tb_hash_t *hash, uint32_t type)
+@@ -374,6 +374,43 @@ bool evtlog_append_tpm12(uint8_t pcr, tb_hash_t *hash, uint32_t type)
      return true;
  }
  
@@ -137,7 +137,7 @@ index fb5a154..addf9f8 100644
 +        goto fail;
 +
 +    reserve = PAGE_UP(*size);
-+    get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
++    e820_get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
 +    if (ram_start == 0)
 +        goto fail;
 +
@@ -160,7 +160,7 @@ index fb5a154..addf9f8 100644
  void dump_event_2(void)
  {
      heap_event_log_descr_t *log_descr;
-@@ -478,8 +515,7 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr, uint32_t type, hash_list_t *hl)
+@@ -479,8 +516,7 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr, uint32_t type, hash_list_t *hl)
          return false;
      }
  
@@ -170,7 +170,7 @@ index fb5a154..addf9f8 100644
      event->pcr_index = pcr;
      event->event_type = type;
      event->event_size = 0;  // No event data passed by tboot.
-@@ -500,6 +536,121 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr, uint32_t type, hash_list_t *hl)
+@@ -501,6 +537,121 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr, uint32_t type, hash_list_t *hl)
      return true;
  }
  
@@ -198,7 +198,7 @@ index fb5a154..addf9f8 100644
 +        goto fail;
 +
 +    reserve = PAGE_UP(*size);
-+    get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
++    e820_get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
 +    if (ram_start == 0)
 +        goto fail;
 +
@@ -266,7 +266,7 @@ index fb5a154..addf9f8 100644
 +    reserve = PAGE_UP(*size);
 +
 +    /* Find a RAM region below 4G. */
-+    get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
++    e820_get_highest_sized_ram(reserve, 0x100000000ULL, &ram_start, &ram_size);
 +    if ( ram_start == 0 )
 +        goto fail;
 +
@@ -292,7 +292,7 @@ index fb5a154..addf9f8 100644
  bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
  {
      int log_type = get_evtlog_type();
-@@ -526,6 +677,28 @@ bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
+@@ -527,6 +678,28 @@ bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
      return true;
  }
  
