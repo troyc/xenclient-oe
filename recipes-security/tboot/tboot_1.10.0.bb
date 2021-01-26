@@ -1,7 +1,7 @@
 require tboot.inc
 
 LICENSE = "BSD"
-LIC_FILES_CHKSUM = "file://COPYING;md5=7730ab1e15a162ca347bcc1722486d89"
+LIC_FILES_CHKSUM = "file://COPYING;md5=b86c2f3e88dffdbc026c71e2a818c70c"
 
 S = "${WORKDIR}/${PN}-${PV}"
 
@@ -19,8 +19,8 @@ SRC_URI = " \
     file://gcc9.patch \
 "
 
-SRC_URI[md5sum] = "29cc2524e48eaba12249d3476be219b2"
-SRC_URI[sha256sum] = "007212deacab8eb159d71449766f9b2e0523439f1c4fd64d1932eb38cb60e053"
+SRC_URI[md5sum] = "0922c78db8ca25f610d5cec143319e9a"
+SRC_URI[sha256sum] = "3c8c411e672b0d07c42a07435b0f56d8a6e3345801cd3012fa6e8d906dc2923b"
 
 inherit deploy
 
