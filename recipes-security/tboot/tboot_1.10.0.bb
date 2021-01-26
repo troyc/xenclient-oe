@@ -16,6 +16,7 @@ SRC_URI = " \
     file://0007-tboot-Export-TPM-event-log-to-VMM-Kernel.patch \
     file://0008-Find-e820-regions-that-include-the-limit.patch \
     file://0009-Add-support-for-launching-64-bit-PE-kernels.patch \
+    file://0010-tboot-undeprecate-lcptools.patch \
     file://gcc9.patch \
 "
 

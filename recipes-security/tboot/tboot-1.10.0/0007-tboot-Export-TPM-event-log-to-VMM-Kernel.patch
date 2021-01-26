@@ -1,4 +1,4 @@
-From ce45a1a830d19021afa137e6269e498d209203cd Mon Sep 17 00:00:00 2001
+From f9bce020be6f0864a89c0ef8668d43044abdc87e Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 14:02:07 -0400
 Subject: [PATCH 7/9] tboot: Export TPM event log to VMM/Kernel.
@@ -9,14 +9,14 @@ introducing the hypercall to access the log).
 
 Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
 ---
- include/tboot.h         |  21 +++++
- tboot/common/tboot.c    |  21 +++++
+ include/tboot.h         |  18 ++++
+ tboot/common/tboot.c    |  24 ++++++
  tboot/include/txt/txt.h |   1 +
  tboot/txt/txt.c         | 177 +++++++++++++++++++++++++++++++++++++++-
  4 files changed, 218 insertions(+), 2 deletions(-)
 
 diff --git a/include/tboot.h b/include/tboot.h
-index abb1ca4..3bec9e8 100644
+index d1bebb8..e37dd94 100644
 --- a/include/tboot.h
 +++ b/include/tboot.h
 @@ -109,6 +109,14 @@ typedef struct __packed {
@@ -39,19 +39,23 @@ index abb1ca4..3bec9e8 100644
  }
  
 +#if __WORDSIZE == 64
-+# define __PRI64_PREFIX	"l"
-+# define __PRIPTR_PREFIX	"l"
++# define __PRI64_PREFIX        "l"
++# define __PRIPTR_PREFIX       "l"
 +#else
-+# define __PRI64_PREFIX	"ll"
++# define __PRI64_PREFIX        "ll"
 +# define __PRIPTR_PREFIX
 +#endif
-+#define PRIu64		__PRI64_PREFIX "u"
-+#define PRIx64		__PRI64_PREFIX "x"
++#define PRIu64         __PRI64_PREFIX "u"
++#define PRIx64         __PRI64_PREFIX "x"
 +
- static inline void print_tboot_shared(const tboot_shared_t *tboot_shared)
- {
-     printk(TBOOT_DETA"tboot_shared data:\n");
-@@ -163,6 +181,9 @@ static inline void print_tboot_shared(const tboot_shared_t *tboot_shared)
+ #endif    /* __TBOOT_H__ */
+ 
+ /*
+diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
+index 7f0cfbd..a72c2ca 100644
+--- a/tboot/common/tboot.c
++++ b/tboot/common/tboot.c
+@@ -167,6 +167,9 @@ static inline void print_tboot_shared(const tboot_shared_t *tboot_shared)
      printk(TBOOT_DETA"\t flags: 0x%8.8x\n", tboot_shared->flags);
      printk(TBOOT_DETA"\t ap_wake_addr: 0x%08x\n", (uint32_t)tboot_shared->ap_wake_addr);
      printk(TBOOT_DETA"\t ap_wake_trigger: %u\n", tboot_shared->ap_wake_trigger);
@@ -60,12 +64,8 @@ index abb1ca4..3bec9e8 100644
 +    printk(TBOOT_DETA"\t evt_log_format: 0x%02x\n", tboot_shared->evt_log_format);
  }
  
- #endif    /* __TBOOT_H__ */
-diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 37a2923..d21d9f1 100644
---- a/tboot/common/tboot.c
-+++ b/tboot/common/tboot.c
-@@ -220,6 +220,15 @@ static void post_launch(void)
+ static void post_launch(void)
+@@ -235,6 +238,15 @@ static void post_launch(void)
          apply_policy(TB_ERR_FATAL);
      }
  
@@ -81,7 +81,7 @@ index 37a2923..d21d9f1 100644
      /*
       * verify modules against policy
       */
-@@ -264,6 +273,18 @@ static void post_launch(void)
+@@ -279,6 +291,18 @@ static void post_launch(void)
          printk(TBOOT_ERR"ap_wake_mwait specified but the CPU doesn't support it.\n");
      }
  
@@ -113,10 +113,10 @@ index 28eb6e3..40ce20a 100644
  extern uint32_t g_using_da;
  #endif      /* __TXT_TXT_H__ */
 diff --git a/tboot/txt/txt.c b/tboot/txt/txt.c
-index 0b7c814..f170f0f 100644
+index 6dc7ed5..49a160f 100644
 --- a/tboot/txt/txt.c
 +++ b/tboot/txt/txt.c
-@@ -374,6 +374,43 @@ bool evtlog_append_tpm12(uint8_t pcr, tb_hash_t *hash, uint32_t type)
+@@ -376,6 +376,43 @@ bool evtlog_append_tpm12(uint8_t pcr, tb_hash_t *hash, uint32_t type)
      return true;
  }
  
@@ -160,17 +160,17 @@ index 0b7c814..f170f0f 100644
  void dump_event_2(void)
  {
      heap_event_log_descr_t *log_descr;
-@@ -479,8 +516,7 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr, uint32_t type, hash_list_t *hl)
+@@ -481,8 +518,7 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr, uint32_t type, hash_list_t *hl)
          return false;
      }
  
--    event = (tcg_pcr_event2*)(void *)(unsigned long)g_elog_2_1->phys_addr +
--        g_elog_2_1->next_record_offset;
+-    event = (tcg_pcr_event2*)(void *)(unsigned long)(g_elog_2_1->phys_addr +
+-        g_elog_2_1->next_record_offset);
 +    event = (tcg_pcr_event2*)(uintptr_t)(g_elog_2_1->phys_addr + g_elog_2_1->next_record_offset);
      event->pcr_index = pcr;
      event->event_type = type;
      event->event_size = 0;  // No event data passed by tboot.
-@@ -501,6 +537,121 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr, uint32_t type, hash_list_t *hl)
+@@ -503,6 +539,121 @@ bool evtlog_append_tpm2_tcg(uint8_t pcr, uint32_t type, hash_list_t *hl)
      return true;
  }
  
@@ -292,7 +292,7 @@ index 0b7c814..f170f0f 100644
  bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
  {
      int log_type = get_evtlog_type();
-@@ -527,6 +678,28 @@ bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
+@@ -529,6 +680,28 @@ bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
      return true;
  }
  

@@ -1,4 +1,4 @@
-From fc2f4791acf172e16dd571521f63926682b15924 Mon Sep 17 00:00:00 2001
+From 98af1713600ec11df3ab934af4e6a5174e8e3e2c Mon Sep 17 00:00:00 2001
 From: Daniel De Graaf <dgdegra@tycho.nsa.gov>
 Date: Wed, 28 Feb 2018 17:52:49 -0500
 Subject: [PATCH 8/9] Find e820 regions that include the limit

@@ -1,4 +1,4 @@
-From 3e8ab6dfa8d2cd3372bfd5463772ac1345da5944 Mon Sep 17 00:00:00 2001
+From 4c0b43c1d2a343f887fb530d58db3521acf86ac3 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 12:10:22 -0400
 Subject: [PATCH 5/9] pcr-calc: Add pcr calculator tool.
@@ -63,15 +63,15 @@ Signed-off-by: Daniel P. Smith <dpsmith@apertussolutions.com>
  create mode 100644 pcr-calc/uuid.h
 
 diff --git a/Makefile b/Makefile
-index 2ef127e..d896740 100644
+index b0c254e..1f9c584 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -14,7 +14,7 @@ export ROOTDIR=$(CURDIR)
  include Config.mk
  
  # (txt-test is not included because it requires pathing to Linux src)
--SUBDIRS := tboot safestringlib lcptools lcptools-v2 tb_polgen utils docs
-+SUBDIRS := tboot safestringlib lcptools lcptools-v2 tb_polgen utils pcr-calc docs
+-SUBDIRS := tboot safestringlib lcptools-v2 tb_polgen utils docs
++SUBDIRS := tboot safestringlib lcptools-v2 tb_polgen utils pcr-calc docs
  
  #
  # build rules

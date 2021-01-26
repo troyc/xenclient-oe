@@ -1,4 +1,4 @@
-From 90b06ce7f2a52906711e903e96d732ec94ef0d6b Mon Sep 17 00:00:00 2001
+From 365725b5d57ea29e1ff86950c603a11eb6f9cf25 Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Mon, 13 Aug 2018 13:58:44 -0400
 Subject: [PATCH 6/9] tpm2.0: Perform orderly shutdown.
@@ -7,37 +7,33 @@ Avoid TPM_PT_LOCKOUT_COUNTER being incremented unnecessarily.
 
 Signed-off-by: Chris Rogers <rogersc@ainfosec.com>
 ---
- tboot/common/tboot.c  |  9 ++++++++-
+ tboot/common/tboot.c  |  6 ++++++
  tboot/common/tpm_20.c | 16 ++++++++++++++++
  tboot/include/tpm.h   |  3 ++-
- 3 files changed, 26 insertions(+), 2 deletions(-)
+ 3 files changed, 24 insertions(+), 1 deletion(-)
 
 diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 000e9a7..37a2923 100644
+index d1402e7..7f0cfbd 100644
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -649,8 +649,15 @@ void shutdown(void)
-         /* have TPM save static PCRs (in case VMM/kernel didn't) */
-         /* per TCG spec, TPM can invalidate saved state if any other TPM
-            operation is performed afterwards--so do this last */
--        if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_S3 )
-+        if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_S3 ) {
-             tpm_fp->save_state(tpm, tpm->cur_loc);
+@@ -680,6 +680,12 @@ void shutdown(void)
+             if (tpm_fp->save_state(tpm, tpm->cur_loc) != 0) {
+                 printk(TBOOT_ERR"failed to save TPM state\n");
+             }
 +        } else if ( _tboot_shared.shutdown_type == TB_SHUTDOWN_REBOOT ||
 +                   _tboot_shared.shutdown_type == TB_SHUTDOWN_HALT ||
 +                   _tboot_shared.shutdown_type == TB_SHUTDOWN_S5) {
-+           if(tpm->major == TPM20_VER_MAJOR){
-+               tpm_fp->shutdown(tpm, tpm->cur_loc);
-+           }
-+        }
++            if(tpm->major == TPM20_VER_MAJOR) {
++                tpm_fp->shutdown(tpm, tpm->cur_loc);
++            }
+         }
  
          /* scrub any secrets by clearing their memory, then flush cache */
-         /* we don't have any secrets to scrub, however */
 diff --git a/tboot/common/tpm_20.c b/tboot/common/tpm_20.c
-index aaeb891..3eae219 100644
+index 475ab83..ddbbebc 100644
 --- a/tboot/common/tpm_20.c
 +++ b/tboot/common/tpm_20.c
-@@ -2559,6 +2559,21 @@ static bool tpm20_get_random(struct tpm_if *ti, uint32_t locality,
+@@ -2581,6 +2581,21 @@ static bool tpm20_get_random(struct tpm_if *ti, uint32_t locality,
      return true;
  }
  
@@ -59,7 +55,7 @@ index aaeb891..3eae219 100644
  static uint32_t tpm20_save_state(struct tpm_if *ti, uint32_t locality)
  {
      u32 ret;
-@@ -2845,6 +2860,7 @@ const struct tpm_if_fp tpm_20_if_fp = {
+@@ -2867,6 +2882,7 @@ const struct tpm_if_fp tpm_20_if_fp = {
      .verify_creation = tpm20_verify_creation,
      .get_random = tpm20_get_random,
      .save_state = tpm20_save_state,
@@ -68,10 +64,10 @@ index aaeb891..3eae219 100644
      .context_save = tpm20_context_save,
      .context_load = tpm20_context_load,
 diff --git a/tboot/include/tpm.h b/tboot/include/tpm.h
-index 4cd9b25..ab4a43f 100644
+index fbbd556..b0deed3 100644
 --- a/tboot/include/tpm.h
 +++ b/tboot/include/tpm.h
-@@ -482,7 +482,8 @@ struct tpm_if_fp {
+@@ -483,7 +483,8 @@ struct tpm_if_fp {
      bool (*get_random)(struct tpm_if *ti, u32 locality, u8 *random_data, u32 *data_size);
  
      uint32_t (*save_state)(struct tpm_if *ti, u32 locality);

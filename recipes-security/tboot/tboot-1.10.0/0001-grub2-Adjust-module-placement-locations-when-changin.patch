@@ -1,4 +1,4 @@
-From 96b4a70eb39a8e25345c964b0eb3893a52917240 Mon Sep 17 00:00:00 2001
+From c4711c67c157247f09f585d18e5befa92cb8f00b Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Thu, 9 Aug 2018 16:35:10 -0400
 Subject: [PATCH 1/9] grub2: Adjust module placement locations when changing
@@ -69,10 +69,10 @@ index e2bff04..ab4e1d1 100644
   * Local variables:
   * mode: C
 diff --git a/tboot/common/loader.c b/tboot/common/loader.c
-index 74d75ac..cc998a8 100644
+index 7996124..541f7c5 100644
 --- a/tboot/common/loader.c
 +++ b/tboot/common/loader.c
-@@ -2120,6 +2120,183 @@ void determine_loader_type(void *addr, uint32_t magic)
+@@ -2154,6 +2154,183 @@ void determine_loader_type(void *addr, uint32_t magic)
       */
  }
  
@@ -257,10 +257,10 @@ index 74d75ac..cc998a8 100644
   * Local variables:
   * mode: C
 diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index cec4e2b..29af68e 100644
+index e6d39b8..e7e55ce 100644
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -180,6 +180,9 @@ static void post_launch(void)
+@@ -195,6 +195,9 @@ static void post_launch(void)
      /* remove all TXT sinit acm modules before verifying modules */
      remove_txt_modules(g_ldr_ctx);
  
@@ -284,7 +284,7 @@ index 760e1c3..8a68e9d 100644
  #endif    /* __E820_H__ */
  
 diff --git a/tboot/include/loader.h b/tboot/include/loader.h
-index bfc4633..c4f258f 100644
+index 10e3b1f..4d239d7 100644
 --- a/tboot/include/loader.h
 +++ b/tboot/include/loader.h
 @@ -85,6 +85,7 @@ extern bool verify_modules(loader_ctx *lctx);

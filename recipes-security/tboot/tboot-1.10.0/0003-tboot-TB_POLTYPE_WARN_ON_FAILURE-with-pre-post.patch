@@ -1,4 +1,4 @@
-From 43bb75964c8eabee498495d644d18ef8d475cc57 Mon Sep 17 00:00:00 2001
+From 1c13bd180718a0841f1db13f793d9bb80d9fe1cf Mon Sep 17 00:00:00 2001
 From: Eric Chanudet <chanudete@ainfosec.com>
 Date: Fri, 10 Aug 2018 22:18:58 -0400
 Subject: [PATCH 3/9] tboot: TB_POLTYPE_WARN_ON_FAILURE with pre/post.
@@ -65,7 +65,7 @@ Signed-off-by: Eric Chanudet <chanudete@ainfosec.com>
  tboot/txt/errors.c            |  67 ++++-------
  tboot/txt/txt.c               |   6 +-
  tboot/txt/verify.c            |  18 ++-
- utils/parse_err.c             |  36 +-----
+ utils/txt-parse_err.c         |  36 +-----
  16 files changed, 597 insertions(+), 266 deletions(-)
  create mode 100644 docs/error_handling.txt
 
@@ -375,7 +375,7 @@ index 736e82d..8cdb7d6 100644
  }
  
 diff --git a/tb_polgen/param.c b/tb_polgen/param.c
-index dfe7b5d..6689592 100644
+index fd41531..b3b9171 100644
 --- a/tb_polgen/param.c
 +++ b/tb_polgen/param.c
 @@ -50,7 +50,7 @@
@@ -397,7 +397,7 @@ index dfe7b5d..6689592 100644
      {NULL}
  };
 diff --git a/tboot/common/boot.S b/tboot/common/boot.S
-index df910e8..47feaff 100644
+index 01bf01c..fc7370c 100644
 --- a/tboot/common/boot.S
 +++ b/tboot/common/boot.S
 @@ -38,6 +38,7 @@
@@ -415,10 +415,10 @@ index df910e8..47feaff 100644
 -/* errorcode for post-launch memory layout verfication failure */
 -#define LAYOUT_ERR             0xc0008001
 -
- .section ".tboot_multiboot_header","w"
-         .align 4
- /* multiboot header */
-@@ -145,17 +143,17 @@ ENTRY(_post_launch_entry)
+ /* Helpers macros from XEN source code */
+         .macro mb2ht_args arg:req, args:vararg
+         .long \arg
+@@ -173,17 +171,17 @@ ENTRY(_post_launch_entry)
  	je __start                /* yes, so continue with normal launch */
  
  layout_err:       /* layout check failed so TXT RESET */
@@ -444,10 +444,10 @@ index df910e8..47feaff 100644
  
  ENTRY(__start)
 diff --git a/tboot/common/integrity.c b/tboot/common/integrity.c
-index 562e619..87ff037 100644
+index e761e45..731ff0e 100644
 --- a/tboot/common/integrity.c
 +++ b/tboot/common/integrity.c
-@@ -239,7 +239,7 @@ bool seal_pre_k_state(void)
+@@ -240,7 +240,7 @@ bool seal_pre_k_state(void)
      if ( !seal_data(&g_pre_k_s3_state, sizeof(g_pre_k_s3_state),
                      NULL, 0,
                      sealed_pre_k_state, &sealed_pre_k_state_size) )
@@ -457,10 +457,10 @@ index 562e619..87ff037 100644
      /* we can't leave the system in a state without valid measurements of
         about-to-execute code in the PCRs, so this is a fatal error */
 diff --git a/tboot/common/loader.c b/tboot/common/loader.c
-index cc998a8..7f77278 100644
+index 541f7c5..f723131 100644
 --- a/tboot/common/loader.c
 +++ b/tboot/common/loader.c
-@@ -1479,6 +1479,9 @@ bool launch_kernel(bool is_measured_launch)
+@@ -1486,6 +1486,9 @@ bool launch_kernel(bool is_measured_launch)
          if(!move_modules_above_elf_kernel(g_ldr_ctx, (elf_header_t *)kernel_image))
              return false;
  
@@ -470,7 +470,7 @@ index cc998a8..7f77278 100644
          printk(TBOOT_INFO"transfering control to kernel @%p...\n", 
                 kernel_entry_point);
          /* (optionally) pause when transferring to kernel */
-@@ -1505,6 +1508,10 @@ bool launch_kernel(bool is_measured_launch)
+@@ -1512,6 +1515,10 @@ bool launch_kernel(bool is_measured_launch)
          expand_linux_image(kernel_image, kernel_size,
                             initrd_image, initrd_size,
                             &kernel_entry_point, is_measured_launch);
@@ -482,7 +482,7 @@ index cc998a8..7f77278 100644
                 kernel_entry_point);
          /* (optionally) pause when transferring to kernel */
 diff --git a/tboot/common/policy.c b/tboot/common/policy.c
-index dfa2284..524ebcc 100644
+index 157527c..d535548 100644
 --- a/tboot/common/policy.c
 +++ b/tboot/common/policy.c
 @@ -57,6 +57,7 @@
@@ -493,7 +493,7 @@ index dfa2284..524ebcc 100644
  #include <txt/config_regs.h>
  #include <txt/mtrrs.h>
  #include <txt/txt.h>
-@@ -70,59 +71,88 @@ extern tboot_shared_t _tboot_shared;
+@@ -72,59 +73,88 @@ extern tboot_shared_t _tboot_shared;
  
  extern long s3_flag;
  
@@ -613,7 +613,7 @@ index dfa2284..524ebcc 100644
      },
  };
  
-@@ -136,7 +166,7 @@ static uint8_t _policy_index_buf[MAX_POLICY_SIZE];
+@@ -138,7 +168,7 @@ static uint8_t _policy_index_buf[MAX_POLICY_SIZE];
  /* default policy */
  static const tb_policy_t _def_policy = {
      version        : 2,
@@ -622,7 +622,7 @@ index dfa2284..524ebcc 100644
      hash_alg       : TB_HALG_SHA256,
      policy_control : TB_POLCTL_EXTEND_PCR17,
      num_entries    : 3,
-@@ -166,7 +196,7 @@ static const tb_policy_t _def_policy = {
+@@ -198,7 +228,7 @@ static const tb_policy_t _def_policy_12 = {
  /* default policy for Details/Authorities pcr mapping */
  static const tb_policy_t _def_policy_da = {
      version        : 2,
@@ -631,7 +631,7 @@ index dfa2284..524ebcc 100644
      hash_alg       : TB_HALG_SHA256,
      policy_control : TB_POLCTL_EXTEND_PCR17,
      num_entries    : 3,
-@@ -542,30 +572,35 @@ static bool is_hash_in_policy_entry(const tb_policy_entry_t *pol_entry,
+@@ -633,30 +663,35 @@ static bool is_hash_in_policy_entry(const tb_policy_entry_t *pol_entry,
  /*
   * map policy type + error -> action
   */
@@ -677,7 +677,7 @@ index dfa2284..524ebcc 100644
  }
  
  /*
-@@ -573,34 +608,59 @@ static tb_policy_action_t evaluate_error(tb_error_t error)
+@@ -664,34 +699,59 @@ static tb_policy_action_t evaluate_error(tb_error_t error)
   */
  void apply_policy(tb_error_t error)
  {
@@ -916,10 +916,10 @@ index 3507eaa..853a0e8 100644
  }
 -
 diff --git a/tboot/common/tboot.c b/tboot/common/tboot.c
-index 29af68e..342ecbb 100644
+index e7e55ce..9d35e05 100644
 --- a/tboot/common/tboot.c
 +++ b/tboot/common/tboot.c
-@@ -191,8 +191,9 @@ static void post_launch(void)
+@@ -206,8 +206,9 @@ static void post_launch(void)
      err = txt_protect_mem_regions();
      apply_policy(err);
  
@@ -931,7 +931,7 @@ index 29af68e..342ecbb 100644
  
      /* verify that tboot is in valid RAM (i.e. E820_RAM) */
      base = (uint64_t)TBOOT_BASE_ADDR;
-@@ -302,7 +303,7 @@ void launch_racm(void)
+@@ -317,7 +318,7 @@ void launch_racm(void)
  
      /* prepare cpu */
      if ( !prepare_cpu() )
@@ -940,7 +940,7 @@ index 29af68e..342ecbb 100644
  
      /* prepare tpm */
      if ( !prepare_tpm() )
-@@ -429,6 +430,8 @@ void begin_launch(void *addr, uint32_t magic)
+@@ -453,6 +454,8 @@ void begin_launch(void *addr, uint32_t magic)
  
      /* print any errors on last boot, which must be from TXT launch */
      txt_display_errors();
@@ -949,7 +949,7 @@ index 29af68e..342ecbb 100644
      if (txt_has_error() && get_tboot_ignore_prev_err() == false) {
          apply_policy(TB_ERR_PREV_TXT_ERROR);
      }
-@@ -460,13 +463,6 @@ void begin_launch(void *addr, uint32_t magic)
+@@ -484,13 +487,6 @@ void begin_launch(void *addr, uint32_t magic)
          apply_policy(TB_ERR_FATAL);
      }
  
@@ -963,7 +963,7 @@ index 29af68e..342ecbb 100644
      if ( !prepare_tpm() )
          apply_policy(TB_ERR_TPM_NOT_READY);
  
-@@ -515,6 +511,9 @@ void s3_launch(void)
+@@ -539,6 +535,9 @@ void s3_launch(void)
      if ( g_vga_delay > 0 )
          delay(g_vga_delay * 1000);
  
@@ -1254,7 +1254,7 @@ index a85479d..6459504 100644
          return;
      }
 diff --git a/tboot/txt/txt.c b/tboot/txt/txt.c
-index dbb4f10..0b7c814 100644
+index a86b163..6dc7ed5 100644
 --- a/tboot/txt/txt.c
 +++ b/tboot/txt/txt.c
 @@ -60,6 +60,7 @@
@@ -1265,7 +1265,7 @@ index dbb4f10..0b7c814 100644
  #include <txt/mtrrs.h>
  #include <txt/heap.h>
  #include <txt/acmod.h>
-@@ -847,7 +848,7 @@ tb_error_t txt_launch_environment(loader_ctx *lctx)
+@@ -850,7 +851,7 @@ tb_error_t txt_launch_environment(loader_ctx *lctx)
                               g_mle_hdr.mle_start_off + TBOOT_BASE_ADDR,
                               g_mle_hdr.mle_end_off - g_mle_hdr.mle_start_off);
      if ( mle_ptab_base == NULL )
@@ -1274,9 +1274,9 @@ index dbb4f10..0b7c814 100644
  
      configure_vtd();
  
-@@ -860,7 +861,8 @@ tb_error_t txt_launch_environment(loader_ctx *lctx)
-     os_mle_data = get_os_mle_data_start(txt_heap);
-     save_mtrrs(&(os_mle_data->saved_mtrr_state));
+@@ -878,7 +879,8 @@ tb_error_t txt_launch_environment(loader_ctx *lctx)
+     */
+     printk_flush();
  
 -    /* set MTRRs properly for AC module (SINIT) */
 +    /* set MTRRs properly for AC module (SINIT); if this fails the MTRRs may
@@ -1320,10 +1320,10 @@ index 72df3c8..c5a2bde 100644
  
      if ( !vtd_bios_enabled() ) {
          return TB_ERR_VTD_NOT_SUPPORTED;
-diff --git a/utils/parse_err.c b/utils/parse_err.c
+diff --git a/utils/txt-parse_err.c b/utils/txt-parse_err.c
 index bfce122..d3cc660 100644
---- a/utils/parse_err.c
-+++ b/utils/parse_err.c
+--- a/utils/txt-parse_err.c
++++ b/utils/txt-parse_err.c
 @@ -57,7 +57,7 @@ static inline uint64_t read_txt_config_reg(void *config_regs_base,
  
  int main(int argc, char *argv[])

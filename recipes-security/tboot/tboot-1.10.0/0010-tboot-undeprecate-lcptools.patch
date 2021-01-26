@@ -1,0 +1,167 @@
+From 19bd5bc7a5b8538afce65e97e499cb14ecabfea9 Mon Sep 17 00:00:00 2001
+From: Troy Crosley <troycrosley@gmail.com>
+Date: Tue, 26 Jan 2021 08:24:20 -0500
+Subject: [PATCH] tboot: undeprecate lcptools
+
+Undeprecate lcptools since they are being used for TPM 1.2 devices in
+OpenXT.
+
+Signed-off-by: Troy Crosley <crosleyt@ainfosec.com>
+---
+ Makefile                                            |   2 +-
+ .../Linux_LCP_Tools_User_Manual.doc                 | Bin
+ .../Linux_LCP_Tools_User_Manual.pdf                 | Bin
+ {deprecated/lcptools => lcptools}/Makefile          |   0
+ {deprecated/lcptools => lcptools}/defindex.c        |   0
+ {deprecated/lcptools => lcptools}/getcap.c          |   0
+ {deprecated/lcptools => lcptools}/lcp_crtpconf      | Bin
+ {deprecated/lcptools => lcptools}/lcp_crtpol        | Bin
+ {deprecated/lcptools => lcptools}/lcp_mlehash       | Bin
+ {deprecated/lcptools => lcptools}/lcp_readpol       | Bin
+ {deprecated/lcptools => lcptools}/lcp_writepol      | Bin
+ {deprecated/lcptools => lcptools}/lcptools.c        |   0
+ {deprecated/lcptools => lcptools}/lcptools.h        |   0
+ {deprecated/lcptools => lcptools}/lcputils.c        |   0
+ {deprecated/lcptools => lcptools}/lcputils.h        |   0
+ {deprecated/lcptools => lcptools}/lock.c            |   0
+ {deprecated/lcptools => lcptools}/readpol.c         |   0
+ {deprecated/lcptools => lcptools}/relindex.c        |   0
+ {deprecated/lcptools => lcptools}/tpmnv_defindex    | Bin
+ {deprecated/lcptools => lcptools}/tpmnv_getcap      | Bin
+ {deprecated/lcptools => lcptools}/tpmnv_lock        | Bin
+ {deprecated/lcptools => lcptools}/tpmnv_relindex    | Bin
+ {deprecated/lcptools => lcptools}/trousers_dep      | Bin
+ {deprecated/lcptools => lcptools}/writepol.c        |   0
+ 24 files changed, 1 insertion(+), 1 deletion(-)
+ rename {deprecated/lcptools => lcptools}/Linux_LCP_Tools_User_Manual.doc (100%)
+ rename {deprecated/lcptools => lcptools}/Linux_LCP_Tools_User_Manual.pdf (100%)
+ rename {deprecated/lcptools => lcptools}/Makefile (100%)
+ rename {deprecated/lcptools => lcptools}/defindex.c (100%)
+ rename {deprecated/lcptools => lcptools}/getcap.c (100%)
+ rename {deprecated/lcptools => lcptools}/lcp_crtpconf (100%)
+ rename {deprecated/lcptools => lcptools}/lcp_crtpol (100%)
+ rename {deprecated/lcptools => lcptools}/lcp_mlehash (100%)
+ rename {deprecated/lcptools => lcptools}/lcp_readpol (100%)
+ rename {deprecated/lcptools => lcptools}/lcp_writepol (100%)
+ rename {deprecated/lcptools => lcptools}/lcptools.c (100%)
+ rename {deprecated/lcptools => lcptools}/lcptools.h (100%)
+ rename {deprecated/lcptools => lcptools}/lcputils.c (100%)
+ rename {deprecated/lcptools => lcptools}/lcputils.h (100%)
+ rename {deprecated/lcptools => lcptools}/lock.c (100%)
+ rename {deprecated/lcptools => lcptools}/readpol.c (100%)
+ rename {deprecated/lcptools => lcptools}/relindex.c (100%)
+ rename {deprecated/lcptools => lcptools}/tpmnv_defindex (100%)
+ rename {deprecated/lcptools => lcptools}/tpmnv_getcap (100%)
+ rename {deprecated/lcptools => lcptools}/tpmnv_lock (100%)
+ rename {deprecated/lcptools => lcptools}/tpmnv_relindex (100%)
+ rename {deprecated/lcptools => lcptools}/trousers_dep (100%)
+ rename {deprecated/lcptools => lcptools}/writepol.c (100%)
+
+diff --git a/Makefile b/Makefile
+index 1f9c584..d896740 100644
+--- a/Makefile
++++ b/Makefile
+@@ -14,7 +14,7 @@ export ROOTDIR=$(CURDIR)
+ include Config.mk
+ 
+ # (txt-test is not included because it requires pathing to Linux src)
+-SUBDIRS := tboot safestringlib lcptools-v2 tb_polgen utils pcr-calc docs
++SUBDIRS := tboot safestringlib lcptools lcptools-v2 tb_polgen utils pcr-calc docs
+ 
+ #
+ # build rules
+diff --git a/deprecated/lcptools/Linux_LCP_Tools_User_Manual.doc b/lcptools/Linux_LCP_Tools_User_Manual.doc
+similarity index 100%
+rename from deprecated/lcptools/Linux_LCP_Tools_User_Manual.doc
+rename to lcptools/Linux_LCP_Tools_User_Manual.doc
+diff --git a/deprecated/lcptools/Linux_LCP_Tools_User_Manual.pdf b/lcptools/Linux_LCP_Tools_User_Manual.pdf
+similarity index 100%
+rename from deprecated/lcptools/Linux_LCP_Tools_User_Manual.pdf
+rename to lcptools/Linux_LCP_Tools_User_Manual.pdf
+diff --git a/deprecated/lcptools/Makefile b/lcptools/Makefile
+similarity index 100%
+rename from deprecated/lcptools/Makefile
+rename to lcptools/Makefile
+diff --git a/deprecated/lcptools/defindex.c b/lcptools/defindex.c
+similarity index 100%
+rename from deprecated/lcptools/defindex.c
+rename to lcptools/defindex.c
+diff --git a/deprecated/lcptools/getcap.c b/lcptools/getcap.c
+similarity index 100%
+rename from deprecated/lcptools/getcap.c
+rename to lcptools/getcap.c
+diff --git a/deprecated/lcptools/lcp_crtpconf b/lcptools/lcp_crtpconf
+similarity index 100%
+rename from deprecated/lcptools/lcp_crtpconf
+rename to lcptools/lcp_crtpconf
+diff --git a/deprecated/lcptools/lcp_crtpol b/lcptools/lcp_crtpol
+similarity index 100%
+rename from deprecated/lcptools/lcp_crtpol
+rename to lcptools/lcp_crtpol
+diff --git a/deprecated/lcptools/lcp_mlehash b/lcptools/lcp_mlehash
+similarity index 100%
+rename from deprecated/lcptools/lcp_mlehash
+rename to lcptools/lcp_mlehash
+diff --git a/deprecated/lcptools/lcp_readpol b/lcptools/lcp_readpol
+similarity index 100%
+rename from deprecated/lcptools/lcp_readpol
+rename to lcptools/lcp_readpol
+diff --git a/deprecated/lcptools/lcp_writepol b/lcptools/lcp_writepol
+similarity index 100%
+rename from deprecated/lcptools/lcp_writepol
+rename to lcptools/lcp_writepol
+diff --git a/deprecated/lcptools/lcptools.c b/lcptools/lcptools.c
+similarity index 100%
+rename from deprecated/lcptools/lcptools.c
+rename to lcptools/lcptools.c
+diff --git a/deprecated/lcptools/lcptools.h b/lcptools/lcptools.h
+similarity index 100%
+rename from deprecated/lcptools/lcptools.h
+rename to lcptools/lcptools.h
+diff --git a/deprecated/lcptools/lcputils.c b/lcptools/lcputils.c
+similarity index 100%
+rename from deprecated/lcptools/lcputils.c
+rename to lcptools/lcputils.c
+diff --git a/deprecated/lcptools/lcputils.h b/lcptools/lcputils.h
+similarity index 100%
+rename from deprecated/lcptools/lcputils.h
+rename to lcptools/lcputils.h
+diff --git a/deprecated/lcptools/lock.c b/lcptools/lock.c
+similarity index 100%
+rename from deprecated/lcptools/lock.c
+rename to lcptools/lock.c
+diff --git a/deprecated/lcptools/readpol.c b/lcptools/readpol.c
+similarity index 100%
+rename from deprecated/lcptools/readpol.c
+rename to lcptools/readpol.c
+diff --git a/deprecated/lcptools/relindex.c b/lcptools/relindex.c
+similarity index 100%
+rename from deprecated/lcptools/relindex.c
+rename to lcptools/relindex.c
+diff --git a/deprecated/lcptools/tpmnv_defindex b/lcptools/tpmnv_defindex
+similarity index 100%
+rename from deprecated/lcptools/tpmnv_defindex
+rename to lcptools/tpmnv_defindex
+diff --git a/deprecated/lcptools/tpmnv_getcap b/lcptools/tpmnv_getcap
+similarity index 100%
+rename from deprecated/lcptools/tpmnv_getcap
+rename to lcptools/tpmnv_getcap
+diff --git a/deprecated/lcptools/tpmnv_lock b/lcptools/tpmnv_lock
+similarity index 100%
+rename from deprecated/lcptools/tpmnv_lock
+rename to lcptools/tpmnv_lock
+diff --git a/deprecated/lcptools/tpmnv_relindex b/lcptools/tpmnv_relindex
+similarity index 100%
+rename from deprecated/lcptools/tpmnv_relindex
+rename to lcptools/tpmnv_relindex
+diff --git a/deprecated/lcptools/trousers_dep b/lcptools/trousers_dep
+similarity index 100%
+rename from deprecated/lcptools/trousers_dep
+rename to lcptools/trousers_dep
+diff --git a/deprecated/lcptools/writepol.c b/lcptools/writepol.c
+similarity index 100%
+rename from deprecated/lcptools/writepol.c
+rename to lcptools/writepol.c
+-- 
+2.25.1
+
