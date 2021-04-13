@@ -83,7 +83,6 @@ RDEPENDS_${PN} = " \
     usb-modeswitch \
     upgrade-db \
     rpc-proxy \
-    dbd \
     xenclient-language-sync \
     atapi-pt-helper \
     audio-helper \
@@ -102,7 +101,6 @@ RDEPENDS_${PN} = " \
     vusb-daemon \
     xenmgr-data \
     updatemgr \
-    uid \
     surfman \
     linuxfb-surfman-plugin \
     xenmgr \
