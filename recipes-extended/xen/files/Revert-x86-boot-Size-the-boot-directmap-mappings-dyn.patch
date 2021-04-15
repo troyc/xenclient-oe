@@ -1,0 +1,53 @@
+From d23c07a3a0534d3787fbfb2ab1d8d0af30476188 Mon Sep 17 00:00:00 2001
+From: Troy Crosley <crosleyt@ainfosec.com>
+Date: Thu, 15 Apr 2021 00:59:09 -0400
+Subject: [PATCH] Revert "x86/boot: Size the boot/directmap mappings
+ dynamically"
+
+This reverts commit cbabbc9f56599b6e0fcf6d9c059066abac941bd4.
+---
+ xen/arch/x86/boot/head.S    | 21 ++++++++-------------
+ xen/arch/x86/efi/efi-boot.h | 23 +++++------------------
+ 2 files changed, 13 insertions(+), 31 deletions(-)
+
+diff --git a/xen/arch/x86/efi/efi-boot.h b/xen/arch/x86/efi/efi-boot.h
+index 7188c9a551..68ffd319dd 100644
+--- a/xen/arch/x86/efi/efi-boot.h
++++ b/xen/arch/x86/efi/efi-boot.h
+@@ -611,28 +611,15 @@ static void __init efi_arch_memory_setup(void)
+      * Map Xen into the directmap (needed for early-boot pagetable
+      * handling/walking), and identity map Xen into bootmap (needed for the
+      * transition from the EFI pagetables to Xen), using 2M superpages.
+-     *
+-     * NB: We are currently in physical mode, so a RIP-relative relocation
+-     * against _start/_end gets their real position in memory, which are the
+-     * appropriate l2 slots to map.
+      */
+-#define l2_4G_offset(a)                                                 \
+-    (((UINTN)(a) >> L2_PAGETABLE_SHIFT) & (4 * L2_PAGETABLE_ENTRIES - 1))
+-
+-    for ( i  = l2_4G_offset(_start);
+-          i <= l2_4G_offset(_end - 1); ++i )
++    for ( i = 0; i < 8; ++i )
+     {
+-        l2_pgentry_t pte = l2e_from_paddr(i << L2_PAGETABLE_SHIFT,
+-                                          __PAGE_HYPERVISOR | _PAGE_PSE);
+-
+-        l2_bootmap[i] = pte;
+-
+-        /* Bootmap RWX/Non-global.  Directmap RW/Global. */
+-        l2e_add_flags(pte, PAGE_HYPERVISOR);
++        unsigned int slot = (xen_phys_start >> L2_PAGETABLE_SHIFT) + i;
++        paddr_t addr = slot << L2_PAGETABLE_SHIFT;
+ 
+-        l2_directmap[i] = pte;
++        l2_directmap[slot] = l2e_from_paddr(addr, PAGE_HYPERVISOR|_PAGE_PSE);
++        l2_bootmap[slot] = l2e_from_paddr(addr, __PAGE_HYPERVISOR|_PAGE_PSE);
+     }
+-#undef l2_4G_offset
+ }
+ 
+ static void __init efi_arch_handle_module(struct file *file, const CHAR16 *name,
+-- 
+2.25.1
+

@@ -6,6 +6,7 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
 
 SRC_URI_append = " \
     file://defconfig \
+    file://Revert-x86-boot-Size-the-boot-directmap-mappings-dyn.patch \
     file://0001-python-pygrub-pass-DISTUTILS-xen.4.12.patch \
     file://kconfig-grant-table-v2-interface.patch \
     file://kconfig-grant-table-exotic.patch \
