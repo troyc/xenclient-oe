@@ -1,0 +1,113 @@
+From a3bfa6a27bf763ca5dab1a38d51f288e0136c8b9 Mon Sep 17 00:00:00 2001
+From: Troy Crosley <crosleyt@ainfosec.com>
+Date: Thu, 15 Apr 2021 18:25:02 -0400
+Subject: [PATCH] Revert "x86/boot: Create the l2_xenmap[] mappings
+ dynamically"
+
+This reverts commit 52975142d1546c4dbd7532a27c332bfdc7503274.
+---
+ xen/arch/x86/boot/head.S    | 14 --------------
+ xen/arch/x86/boot/x86_64.S  | 16 +++++++---------
+ xen/arch/x86/efi/efi-boot.h | 14 --------------
+ xen/arch/x86/xen.lds.S      |  3 ---
+ 4 files changed, 7 insertions(+), 40 deletions(-)
+
+diff --git a/xen/arch/x86/boot/head.S b/xen/arch/x86/boot/head.S
+index c2618467cd..2d24e79966 100644
+--- a/xen/arch/x86/boot/head.S
++++ b/xen/arch/x86/boot/head.S
+@@ -664,20 +664,6 @@ trampoline_setup:
+         cmp     %edi, %eax
+         jb      1b
+ 
+-        /* Map Xen into the higher mappings using 2M superpages. */
+-        lea     _PAGE_PSE + PAGE_HYPERVISOR_RWX + sym_esi(_start), %eax
+-        mov     $sym_offs(_start),   %ecx   /* %eax = PTE to write ^      */
+-        mov     $sym_offs(_end - 1), %edx
+-        shr     $L2_PAGETABLE_SHIFT, %ecx   /* %ecx = First slot to write */
+-        shr     $L2_PAGETABLE_SHIFT, %edx   /* %edx = Final slot to write */
+-
+-1:      mov     %eax, sym_offs(l2_xenmap)(%esi, %ecx, 8)
+-        add     $1, %ecx
+-        add     $1 << L2_PAGETABLE_SHIFT, %eax
+-
+-        cmp     %edx, %ecx
+-        jbe     1b
+-
+         /*
+          * Map Xen into the directmap (needed for early-boot pagetable
+          * handling/walking), and identity map Xen into bootmap (needed for
+diff --git a/xen/arch/x86/boot/x86_64.S b/xen/arch/x86/boot/x86_64.S
+index d61048c583..b080b53ef0 100644
+--- a/xen/arch/x86/boot/x86_64.S
++++ b/xen/arch/x86/boot/x86_64.S
+@@ -113,20 +113,18 @@ GLOBAL(l2_directmap)
+         .size l2_directmap, . - l2_directmap
+ 
+ /*
+- * L2 mapping the Xen text/data/bss region, constructed dynamically.
+- * Executable fixmap is hooked up statically.
+- * Uses 1x 4k page.
++ * L2 mapping the 1GB Xen text/data/bss region.  At boot it maps 16MB from
++ * __image_base__, and is modified when Xen relocates itself.  Uses 1x 4k
++ * page.
+  */
+ GLOBAL(l2_xenmap)
+-        idx = 0
+-        .rept L2_PAGETABLE_ENTRIES
+-        .if idx == l2_table_offset(FIXADDR_X_TOP - 1)
+-        .quad sym_offs(l1_fixmap_x) + __PAGE_HYPERVISOR
+-        .else
+         .quad 0
+-        .endif
++        idx = 1
++        .rept 7
++        .quad sym_offs(__image_base__) + (idx << L2_PAGETABLE_SHIFT) + (PAGE_HYPERVISOR_RWX | _PAGE_PSE)
+         idx = idx + 1
+         .endr
++        .fill L2_PAGETABLE_ENTRIES - 8, 8, 0
+         .size l2_xenmap, . - l2_xenmap
+ 
+ /* L2 mapping the fixmap.  Uses 1x 4k page. */
+diff --git a/xen/arch/x86/efi/efi-boot.h b/xen/arch/x86/efi/efi-boot.h
+index 68ffd319dd..1872d04048 100644
+--- a/xen/arch/x86/efi/efi-boot.h
++++ b/xen/arch/x86/efi/efi-boot.h
+@@ -585,20 +585,6 @@ static void __init efi_arch_memory_setup(void)
+     if ( !efi_enabled(EFI_LOADER) )
+         return;
+ 
+-    /*
+-     * Map Xen into the higher mappings, using 2M superpages.
+-     *
+-     * NB: We are currently in physical mode, so a RIP-relative relocation
+-     * against _start/_end result in our arbitrary placement by the bootloader
+-     * in memory, rather than the intended high mappings position.  Subtract
+-     * xen_phys_start to get the appropriate slots in l2_xenmap[].
+-     */
+-    for ( i =  l2_table_offset((UINTN)_start   - xen_phys_start);
+-          i <= l2_table_offset((UINTN)_end - 1 - xen_phys_start); ++i )
+-        l2_xenmap[i] =
+-            l2e_from_paddr(xen_phys_start + (i << L2_PAGETABLE_SHIFT),
+-                           PAGE_HYPERVISOR_RWX | _PAGE_PSE);
+-
+     /* Check that there is at least 4G of mapping space in l2_*map[] */
+     BUILD_BUG_ON((sizeof(l2_bootmap)   / L2_PAGETABLE_ENTRIES) < 4);
+     BUILD_BUG_ON((sizeof(l2_directmap) / L2_PAGETABLE_ENTRIES) < 4);
+diff --git a/xen/arch/x86/xen.lds.S b/xen/arch/x86/xen.lds.S
+index 0273f79152..39c872ac38 100644
+--- a/xen/arch/x86/xen.lds.S
++++ b/xen/arch/x86/xen.lds.S
+@@ -366,9 +366,6 @@ ASSERT(__2M_rwdata_end <= XEN_VIRT_END - XEN_VIRT_START + __XEN_VIRT_START -
+ ASSERT(kexec_reloc_size - kexec_reloc <= PAGE_SIZE, "kexec_reloc is too large")
+ #endif
+ 
+-/* The Multiboot setup paths relies on this to simplify superpage PTE creation. */
+-ASSERT(IS_ALIGNED(_start,            MB(2)), "_start misaligned")
+-
+ ASSERT(IS_ALIGNED(__2M_text_end,     SECTION_ALIGN), "__2M_text_end misaligned")
+ ASSERT(IS_ALIGNED(__2M_rodata_start, SECTION_ALIGN), "__2M_rodata_start misaligned")
+ ASSERT(IS_ALIGNED(__2M_rodata_end,   SECTION_ALIGN), "__2M_rodata_end misaligned")
+-- 
+2.25.1
+
