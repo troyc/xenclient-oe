@@ -597,7 +597,7 @@ Index: git/xen/arch/x86/efi/efi-boot.h
      /* Allocate space for trampoline (in first Mb). */
      cfg.addr = 0x100000;
  
-@@ -751,6 +1170,159 @@ void __init efi_multiboot2(EFI_HANDLE Im
+@@ -724,6 +1143,159 @@ void __init efi_multiboot2(EFI_HANDLE Im
      efi_exit_boot(ImageHandle, SystemTable);
  }
  
@@ -621,7 +621,7 @@ Index: git/xen/arch/x86/efi/efi-boot.h
 +     * mapping that should not have been relocated.  The first entry of that
 +     * table is already correct; re-generate the rest now.
 +     */
-+    for ( i = 1; i < 512; i++ )
++    for ( i = 1; i < 4 * L2_PAGETABLE_ENTRIES - 1; i++ )
 +    {
 +        paddr_t addr = i << L2_PAGETABLE_SHIFT;
 +        l2_directmap[i] = l2e_from_paddr(addr, PAGE_HYPERVISOR|_PAGE_PSE);
