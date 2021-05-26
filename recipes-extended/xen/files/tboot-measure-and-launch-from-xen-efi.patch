@@ -429,7 +429,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
      /* Set system registers and transfer control. */
      asm volatile("pushq $0\n\tpopfq");
-@@ -263,22 +559,35 @@ static void __init noreturn efi_arch_pos
+@@ -263,22 +559,36 @@ static void __init noreturn efi_arch_pos
                     "lretq  %[stkoff]-16"
                     : [rip] "=&r" (efer/* any dead 64-bit variable */),
                       [cr4] "+&r" (cr4)
@@ -461,14 +461,15 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
 -static void __init efi_arch_cfg_file_late(EFI_FILE_HANDLE dir_handle, char *section)
 +static void __init efi_arch_cfg_file_late(EFI_FILE_HANDLE dir_handle, char *section,
-+                                          EFI_SHIM_LOCK_PROTOCOL *shim_lock)
++                                          EFI_SHIM_LOCK_PROTOCOL *shim_lock, EFI_HANDLE parent_image)
  {
      union string name;
++    EFI_HANDLE image;
 +    EFI_STATUS status;
  
      name.s = get_value(&cfg, section, "ucode");
      if ( !name.s )
-@@ -290,6 +599,112 @@ static void __init efi_arch_cfg_file_lat
+@@ -290,6 +600,122 @@ static void __init efi_arch_cfg_file_lat
          read_file(dir_handle, s2w(&name), &ucode, NULL);
          efi_bs->FreePool(name.w);
      }
@@ -482,7 +483,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +        name.s = get_value(&cfg, "global", "tboot");
 +    if ( name.s )
 +    {
-+        struct elf_binary elf;
++        //struct elf_binary elf;
 +        struct file xen_self;
 +        module_t tmp;
 +        u32 tboot_cmdline;
@@ -491,6 +492,15 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +        read_file(dir_handle, s2w(&name), &tboot_file, option_str);
 +        efi_bs->FreePool(name.w);
 +
++	//status = uefi_call_wrapper(BS->LoadImage, 6, FALSE, parent_image, path, NULL, 0, &image);
++        PrintStr(L"AXA test load image...\r\n");
++	status = efi_bs->LoadImage(FALSE, parent_image, NULL, (void *)tboot_file.addr, tboot_file.size, &image);
++        if (EFI_ERROR(status)) {
++                PrintErrMesg(L"AXA Error from LoadImage", status);
++	}
++
++        PrintStr(L"AXA test start image...\r\n");
++	status = efi_bs->StartImage(image, NULL, NULL);
 +        /* tboot is not yet SecureBoot compatible (it's still in ELF format) */
 +        if ( shim_lock &&
 +            (status = shim_lock->Measure(tboot_file.ptr, tboot_file.size, 4))
@@ -501,6 +511,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +        mbi.mods_count--;
 +        tboot_cmdline = mb_modules[mbi.mods_count].string;
 +
++	/* AXA
 +        if ( elf_init(&elf, tboot_file.ptr, tboot_file.size) ) {
 +            PrintStr(L"Could init tboot ELF parsing.\r\n");
 +            tboot_file.size = 0;
@@ -523,7 +534,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +
 +        // Free the ELF binary for tboot now that it's been relocated
 +        efi_bs->FreePages(tboot_file.addr, PFN_UP(tboot_file.size));
-+
++        */        
 +        // Read in xen.efi and then move it to the first module slot
 +        read_file(dir_handle, xen_self_filename, &xen_self, NULL);
 +
@@ -581,7 +592,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  }
  
  static void __init efi_arch_handle_cmdline(CHAR16 *image_name,
-@@ -564,6 +979,10 @@ static void __init efi_arch_memory_setup
+@@ -564,6 +990,10 @@ static void __init efi_arch_memory_setup
      unsigned int i;
      EFI_STATUS status;
  
@@ -592,7 +603,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      /* Allocate space for trampoline (in first Mb). */
      cfg.addr = 0x100000;
  
-@@ -714,6 +1133,146 @@ void __init efi_multiboot2(EFI_HANDLE Im
+@@ -714,6 +1144,146 @@ void __init efi_multiboot2(EFI_HANDLE Im
      efi_exit_boot(ImageHandle, SystemTable);
  }
  
@@ -950,7 +961,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
          }
  
 -        efi_arch_cfg_file_late(dir_handle, section.s);
-+        efi_arch_cfg_file_late(dir_handle, section.s, shim_lock);
++        efi_arch_cfg_file_late(dir_handle, section.s, shim_lock, ImageHandle);
  
          efi_bs->FreePages(cfg.addr, PFN_UP(cfg.size));
          cfg.addr = 0;
