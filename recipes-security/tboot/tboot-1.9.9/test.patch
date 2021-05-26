@@ -1,0 +1,24 @@
+From 0f1c0439c4c8e3a2ead4c9fbfafd26aa9d4358cd Mon Sep 17 00:00:00 2001
+From: Troy Crosley <crosleyt@ainfosec.com>
+Date: Wed, 19 May 2021 18:24:58 -0400
+Subject: [PATCH] test
+
+---
+ tboot/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tboot/Makefile b/tboot/Makefile
+index fb1df41..363d804 100644
+--- a/tboot/Makefile
++++ b/tboot/Makefile
+@@ -66,6 +66,7 @@ install : $(DISTDIR)/boot/$(TARGET).gz
+ $(DISTDIR)/boot/$(TARGET).gz : $(TARGET).gz
+ 	[ -d $(DISTDIR)/boot ] || $(INSTALL_DIR) $(DISTDIR)/boot
+ 	$(INSTALL_DATA) $(TARGET).gz $(DISTDIR)/boot/$(notdir $(TARGET)).gz
++	$(INSTALL_DATA) $(TARGET).mb2 $(DISTDIR)/boot/$(notdir $(TARGET)).mb2
+ 	$(INSTALL_DATA) $(TARGET)-syms $(DISTDIR)/boot/$(notdir $(TARGET))-syms
+ 	[ -d $(DISTDIR)/etc/grub.d ] || $(INSTALL_DIR) $(DISTDIR)/etc/grub.d
+ 	$(INSTALL) -m755 -t $(DISTDIR)/etc/grub.d 20*
+-- 
+2.25.1
+

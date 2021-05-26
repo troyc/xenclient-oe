@@ -1,0 +1,421 @@
+From 97580638a9ec9447b851ba3e60ec0d9d2428766a Mon Sep 17 00:00:00 2001
+From: Lukasz Hawrylko <lukasz.hawrylko@intel.com>
+Date: Thu, 19 Mar 2020 15:33:14 +0100
+Subject: [PATCH] Build binary also in PE format
+
+GRUB2 allows to check signature of application loaded by multiboot2 using
+verifies framework. That functionality requires PE format, signed in the same
+way as for SecureBoot.
+
+This patch introduces tboot.mb2 file that is a PE binary that can be signed and
+loaded via multiboot2. Keep in mind that although PE header indicates that this
+is a 64bit application, under the hood there is a standard 32bit TBOOT version that
+can't be run without GRUB2.
+
+GRUB2 2.06 is required to use tboot.mb2
+
+Signed-off-by: Lukasz Hawrylko <lukasz.hawrylko@intel.com>
+---
+ .hgignore                 |   1 +
+ include/config.h          |   2 +
+ tboot/Makefile            |   7 +-
+ tboot/common/boot.S       | 198 +++++++++++++++++++++++++++++++++++++-
+ tboot/common/efi_stub.S   |  49 ++++++++++
+ tboot/common/tboot.lds.x  |   7 ++
+ tboot/include/multiboot.h |   4 +
+ 7 files changed, 261 insertions(+), 7 deletions(-)
+ create mode 100644 tboot/common/efi_stub.S
+
+diff --git a/.hgignore b/.hgignore
+index 82b3ab0..d2f0b57 100644
+--- a/.hgignore
++++ b/.hgignore
+@@ -31,6 +31,7 @@
+ ^tboot/tboot$
+ ^tboot/tboot-syms$
+ ^tboot/tboot.gz$
++^tboot/tboot.mb2$
+ ^lcptools/tpmnv_defindex$
+ ^lcptools/tpmnv_getcap$
+ ^lcptools/tpmnv_lock$
+diff --git a/include/config.h b/include/config.h
+index 11c0b68..3ad3f0e 100644
+--- a/include/config.h
++++ b/include/config.h
+@@ -39,6 +39,8 @@
+  * build/support flags
+  */
+ 
++#define FILE_ALIGN 0x20
++
+ /* address tboot will load and execute at */
+ #define TBOOT_START              0x0804000
+ 
+diff --git a/tboot/Makefile b/tboot/Makefile
+index b0050f1..0996e56 100644
+--- a/tboot/Makefile
++++ b/tboot/Makefile
+@@ -12,7 +12,7 @@ include $(CURDIR)/Config.mk
+ TARGET := $(CURDIR)/tboot
+ 
+ # boot.o must be first
+-obj-y := common/boot.o
++obj-y := common/boot.o common/efi_stub.o
+ obj-y += common/acpi.o common/cmdline.o common/com.o common/e820.o
+ obj-y += common/elf.o common/hash.o common/index.o common/integrity.o
+ obj-y += common/linux.o common/loader.o common/memcmp.o common/memcpy.o
+@@ -35,6 +35,9 @@ TARGET_LDS := $(CURDIR)/common/tboot.lds
+ $(TARGET).gz : $(TARGET)
+ 	gzip -n -f -9 < $< > $@
+ 
++$(TARGET).mb2 : $(TARGET).strip
++	$(OBJCOPY) -O binary $< $@
++
+ $(TARGET) : $(OBJS) $(TARGET_LDS)
+ 	$(LD) $(LDFLAGS) -T $(TARGET_LDS) -N $(OBJS) -o $(@D)/.$(@F).0
+ 	$(NM) -n $(@D)/.$(@F).0 >$(TARGET)-syms
+@@ -52,7 +55,7 @@ $(TARGET_LDS).x : FORCE
+ dist : install
+ 
+ 
+-build : $(TARGET).gz
++build : $(TARGET).gz $(TARGET).mb2
+ 
+ 
+ install : $(DISTDIR)/boot/$(TARGET).gz
+diff --git a/tboot/common/boot.S b/tboot/common/boot.S
+index 47feaff..1d244a2 100644
+--- a/tboot/common/boot.S
++++ b/tboot/common/boot.S
+@@ -63,6 +63,30 @@
+ /* OsSinitData field offsets */
+ #define MLE_PGTBL_OFF          8
+ 
++/* errorcode for post-launch memory layout verfication failure */
++#define LAYOUT_ERR             0xc0008001
++
++#define sym_offs(sym)     ((sym) - TBOOT_BASE_ADDR)
++
++        .macro mb2ht_args arg:req, args:vararg
++        .long \arg
++        .ifnb \args
++        mb2ht_args \args
++        .endif
++        .endm
++
++        .macro mb2ht_init type:req, req:req, args:vararg
++        .balign MULTIBOOT2_TAG_ALIGN, 0xc2 /* Avoid padding with long nops. */
++.Lmb2ht_init_start\@:
++        .short \type
++        .short \req
++        .long .Lmb2ht_init_end\@ - .Lmb2ht_init_start\@
++        .ifnb \args
++        mb2ht_args \args
++        .endif
++.Lmb2ht_init_end\@:
++        .endm
++
+ .section ".tboot_multiboot_header","w"
+         .align 4
+ /* multiboot header */
+@@ -84,13 +108,177 @@ multiboot2_header:
+         .long multiboot2_header_end - multiboot2_header
+         /* checksum */
+         .long -(MB2_HEADER_MAGIC + MB2_ARCH_X86 + (multiboot2_header_end - multiboot2_header))
++
++        /* Multiboot2 entry point. */
++        mb2ht_init MB2_HDR_TAG_ENTRY_ADDR, MB2_HDR_TAG_REQUIRED, start
++
++        /* The address tag. */
++        mb2ht_init MB2_HDR_TAG_ADDR, MB2_HDR_TAG_REQUIRED, \
++                   multiboot2_header, /* header_addr */ \
++                   _mle_start,        /* load_addr */ \
++                   __bss_start,       /* load_end_addr */ \
++                   _end               /* bss_end_addr */
++
++        /* Multiboot2 header end tag. */
++        mb2ht_init MB2_HDR_TAG_END, MB2_HDR_TAG_REQUIRED
+ multiboot2_header_end:	
+-        /* tag requests here--RLM, fix me!! Well, maybe! */
+-        .short MB2_HDR_TAG_END
+-        .short 0
+-        .long 8
+ 
+-	.text
++        .size multiboot2_header, . - multiboot2_header
++        .type multiboot2_header, @object
++
++
++        /*
++         * Manually defined PE header, based on XEN version created by Daniel Kiper.
++         */
++.section ".tboot_efi_pe_header","w"
++        .align 4
++
++efi_pe_head:
++        /*
++         * Legacy EXE header.
++         *
++         * Most of it is copied from binutils package, version 2.30,
++         * include/coff/pe.h:struct external_PEI_filehdr and
++         * bfd/peXXigen.c:_bfd_XXi_only_swap_filehdr_out().
++         *
++         * Page is equal 512 bytes here.
++         * Paragraph is equal 16 bytes here.
++         */
++        .short  0x5a4d                               /* EXE magic number. */
++        .short  0x90                                 /* Bytes on last page of file. */
++        .short  0x3                                  /* Pages in file. */
++        .short  0                                    /* Relocations. */
++        .short  0x4                                  /* Size of header in paragraphs. */
++        .short  0                                    /* Minimum extra paragraphs needed. */
++        .short  0xffff                               /* Maximum extra paragraphs needed. */
++        .short  0                                    /* Initial (relative) SS value. */
++        .short  0xb8                                 /* Initial SP value. */
++        .short  0                                    /* Checksum. */
++        .short  0                                    /* Initial IP value. */
++        .short  0                                    /* Initial (relative) CS value. */
++        .short  0x40                                 /* File address of relocation table. */
++        .short  0                                    /* Overlay number. */
++        .fill   4, 2, 0                              /* Reserved words. */
++        .short  0                                    /* OEM identifier. */
++        .short  0                                    /* OEM information. */
++        .fill   10, 2, 0                             /* Reserved words. */
++        .long   pe_header - efi_pe_head              /* File address of the PE header. */
++
++        /*
++         * Standard/Minimal DOS code/data.
++         *
++         * It is copied from binutils package, version 2.30,
++         * include/coff/pe.h:struct external_PEI_filehdr and
++         * bfd/peXXigen.c:_bfd_XXi_only_swap_filehdr_out().
++         *
++         * Do not change DOS code/data size!!! Some buggy applications
++         * ignore PE header address from EXE header and look for PE header
++         * at 0x80 file offset. The size of this code assures that it is
++         * found at exactly that address.
++         */
++        .long   0x0eba1f0e
++        .long   0xcd09b400
++        .long   0x4c01b821
++        .long   0x685421cd
++        .long   0x70207369
++        .long   0x72676f72
++        .long   0x63206d61
++        .long   0x6f6e6e61
++        .long   0x65622074
++        .long   0x6e757220
++        .long   0x206e6920
++        .long   0x20534f44
++        .long   0x65646f6d
++        .long   0x0a0d0d2e
++        .long   0x24
++        .long   0
++
++        /*
++         * PE/COFF header.
++         *
++         * The PE/COFF format is defined by Microsoft, and is available from
++         * http://www.microsoft.com/whdc/system/platform/firmware/PECOFF.mspx
++         *
++         * Some ideas are taken from Linux kernel and Xen ARM64.
++         */
++
++pe_header:
++        .ascii  "PE\0\0"                             /* PE signature. */
++        .short  0x8664                               /* Machine: IMAGE_FILE_MACHINE_AMD64 */
++        .short  1                                    /* NumberOfSections. */
++        .long   0                                    /* TimeDateStamp. */
++        .long   0                                    /* PointerToSymbolTable. */
++        .long   0                                    /* NumberOfSymbols. */
++        .short  section_table - optional_header      /* SizeOfOptionalHeader. */
++        .short  0x226                                /* Characteristics:
++                                                      *   IMAGE_FILE_EXECUTABLE_IMAGE |
++                                                      *   IMAGE_FILE_LARGE_ADDRESS_AWARE |
++                                                      *   IMAGE_FILE_DEBUG_STRIPPED |
++                                                      *   IMAGE_FILE_LINE_NUMS_STRIPPED
++                                                      */
++
++optional_header:
++        .short  0x20b                                /* PE format: PE32+ */
++        .byte   0x02                                 /* MajorLinkerVersion. */
++        .byte   0x1e                                 /* MinorLinkerVersion. */
++        .long   __pe_text_raw_end - efi_pe_head_end              /* SizeOfCode. */
++        .long   0                                    /* SizeOfInitializedData. */
++        .long   0                                    /* SizeOfUninitializedData. */
++        .long   sym_offs(efi_start)                  /* AddressOfEntryPoint. */
++        .long   sym_offs(start)                      /* BaseOfCode. */
++        .quad   0                                    /* ImageBase. */
++        .long   4096                                 /* SectionAlignment. */
++        .long   4096                       /* FileAlignment. */
++        .short  2                                    /* MajorOperatingSystemVersion. */
++        .short  0                                    /* MinorOperatingSystemVersion. */
++        .short  0                          /* MajorImageVersion. */
++        .short  0                       /* MinorImageVersion. */
++        .short  2                                    /* MajorSubsystemVersion. */
++        .short  0                                    /* MinorSubsystemVersion. */
++        .long   0                                    /* Win32VersionValue. */
++        .long   __pe_SizeOfImage                     /* SizeOfImage. */
++        .long   efi_pe_head_end - efi_pe_head        /* SizeOfHeaders. */
++        .long   0                                    /* CheckSum. */
++        .short  0xa                                  /* Subsystem: EFI application. */
++        .short  0                                    /* DllCharacteristics. */
++        .quad   0                                    /* SizeOfStackReserve. */
++        .quad   0                                    /* SizeOfStackCommit. */
++        .quad   0                                    /* SizeOfHeapReserve. */
++        .quad   0                                    /* SizeOfHeapCommit. */
++        .long   0                                    /* LoaderFlags. */
++        .long   0x6                                  /* NumberOfRvaAndSizes. */
++
++        /* Data Directories. */
++        .quad   0                                    /* Export Table. */
++        .quad   0                                    /* Import Table. */
++        .quad   0                                    /* Resource Table. */
++        .quad   0                                    /* Exception Table. */
++        .quad   0                                    /* Certificate Table. */
++        .quad   0                                    /* Base Relocation Table. */
++
++section_table:
++        .ascii  ".text\0\0\0"                        /* Name. */
++        .long   __pe_text_raw_end - TBOOT_START  /* VirtualSize. */
++        .long   sym_offs(start)                      /* VirtualAddress. */
++        .long   __pe_text_raw_end - TBOOT_START  /* SizeOfRawData. */
++        .long   sym_offs(start)        /* PointerToRawData. */
++        .long   0                                    /* PointerToRelocations. */
++        .long   0                                    /* PointerToLinenumbers. */
++        .short  0                                    /* NumberOfRelocations. */
++        .short  0                                    /* NumberOfLinenumbers. */
++        .long   0xe0500020                           /* Characteristics:
++                                                      *   IMAGE_SCN_CNT_CODE |
++                                                      *   IMAGE_SCN_ALIGN_16BYTES |
++                                                      *   IMAGE_SCN_MEM_EXECUTE |
++                                                      *   IMAGE_SCN_MEM_READ |
++                                                      *   IMAGE_SCN_MEM_WRITE
++                                                      */
++
++        .align FILE_ALIGN
++
++efi_pe_head_end:
++
++        .text
+ 
+ ENTRY(start)
+ ENTRY(_start)
+diff --git a/tboot/common/efi_stub.S b/tboot/common/efi_stub.S
+new file mode 100644
+index 0000000..5359e61
+--- /dev/null
++++ b/tboot/common/efi_stub.S
+@@ -0,0 +1,49 @@
++/*
++ * efi_stub.S: Stub that handles situation when binary is executed
++               directly from EFI
++ *
++ * Copyright (c) 2020, Intel Corporation
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ *   * Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ *   * Redistributions in binary form must reproduce the above
++ *     copyright notice, this list of conditions and the following
++ *     disclaimer in the documentation and/or other materials provided
++ *     with the distribution.
++ *   * Neither the name of the Intel Corporation nor the names of its
++ *     contributors may be used to endorse or promote products derived
++ *     from this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
++ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
++ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
++ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
++ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
++ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
++ * OF THE POSSIBILITY OF SUCH DAMAGE.
++ *
++ */
++
++        .code64
++error_msg:
++        .string16 "This binary can be run only with multiboot2 protocol.\r\n"
++
++        .text
++        .globl efi_start
++efi_start:
++        // *SystemTable in RDX
++        mov 0x40(%rdx), %rcx // ConOut
++        lea error_msg(%rip), %rdx // string
++        call *0x08(%rcx)  // OutputString()
++        mov $1, %rax
++        ret
+\ No newline at end of file
+diff --git a/tboot/common/tboot.lds.x b/tboot/common/tboot.lds.x
+index aaacba9..2e1e66e 100644
+--- a/tboot/common/tboot.lds.x
++++ b/tboot/common/tboot.lds.x
+@@ -9,6 +9,8 @@
+ #undef ENTRY
+ #undef ALIGN
+ 
++#define MB(_mb)     ((_mb) << 20)
++
+ OUTPUT_FORMAT("elf32-i386", "elf32-i386", "elf32-i386")
+ OUTPUT_ARCH(i386)
+ ENTRY(start)
+@@ -21,6 +23,7 @@ SECTIONS
+   . = TBOOT_BASE_ADDR;		/* 0x800000 */
+ 
+   .text : {
++	*(.tboot_efi_pe_header)
+ 	*(.tboot_multiboot_header)
+   . = ALIGN(4096);
+ 	*(.mlept)
+@@ -42,6 +45,9 @@ SECTIONS
+ 	CONSTRUCTORS
+ 	}
+ 
++  . = ALIGN(FILE_ALIGN);
++    __pe_text_raw_end = .;
++
+   . = ALIGN(4096);
+ 
+   __bss_start = .;		/* BSS */
+@@ -52,4 +58,5 @@ SECTIONS
+ 	}
+ 
+   _end = . ;
++  __pe_SizeOfImage = ALIGN(. - TBOOT_BASE_ADDR, MB(16));
+ }
+diff --git a/tboot/include/multiboot.h b/tboot/include/multiboot.h
+index ef5c0d6..17f7617 100644
+--- a/tboot/include/multiboot.h
++++ b/tboot/include/multiboot.h
+@@ -38,6 +38,9 @@
+ 
+ #include <config.h>
+ 
++/* Multiboot 2 tag alignment. */
++#define MULTIBOOT2_TAG_ALIGN                            8
++
+ /* Multiboot Header Definitions of OS image*/
+ #define MULTIBOOT_HEADER_MAGIC			0x1BADB002
+ #define MULTIBOOT_HEADER_SEARCH_LIMIT 8192
+@@ -75,6 +78,7 @@
+ #define MB2_HDR_TAG_FRAMEBUFFER		  5
+ #define MB2_HDR_TAG_MOD_ALIGN		  6
+ 
++#define MB2_HDR_TAG_REQUIRED      0
+ #define MB2_HDR_TAG_OPTIONAL		  1
+ 
+ #define MB2_CONS_FLAGS_CONS_REQ		  1
+-- 
+2.25.1
+

@@ -42,6 +42,7 @@ PACKAGES += " \
 FILES_${PN} = " \
     ${base_prefix}/boot/tboot \
     ${base_prefix}/boot/tboot.gz \
+    ${base_prefix}/boot/tboot.mb2 \
 "
 FILES_${PN}-dbg += " \
     ${base_prefix}/boot/tboot-syms \

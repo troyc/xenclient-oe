@@ -20,6 +20,9 @@ SRC_URI = " \
     file://0012-Find-e820-regions-that-include-the-limit.patch \
     file://0013-Add-support-for-launching-64-bit-PE-kernels.patch \
     file://0014-safestringlib-Attend-GCC-warnings.patch \
+    file://Build-binary-also-in-PE-format.patch \
+    file://Strip-executable-file-before-generating-tboot.gz.patch \
+    file://test.patch \
     file://gcc9.patch \
 "
 
@@ -41,5 +44,6 @@ do_compile() {
 
 do_deploy() {
     install -m 0644 "${D}/boot/tboot.gz" "${DEPLOYDIR}/tboot.gz"
+    install -m 0644 "${D}/boot/tboot.mb2" "${DEPLOYDIR}/tboot.mb2"
 }
 addtask do_deploy after do_install before do_build
