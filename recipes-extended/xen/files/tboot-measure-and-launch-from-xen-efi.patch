@@ -469,7 +469,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  
      name.s = get_value(&cfg, section, "ucode");
      if ( !name.s )
-@@ -290,6 +600,122 @@ static void __init efi_arch_cfg_file_lat
+@@ -290,6 +600,127 @@ static void __init efi_arch_cfg_file_lat
          read_file(dir_handle, s2w(&name), &ucode, NULL);
          efi_bs->FreePool(name.w);
      }
@@ -493,19 +493,24 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
 +        efi_bs->FreePool(name.w);
 +
 +	//status = uefi_call_wrapper(BS->LoadImage, 6, FALSE, parent_image, path, NULL, 0, &image);
++	efi_bs->Stall(2 * 1000 * 1000);
 +        PrintStr(L"AXA test load image...\r\n");
++	efi_bs->Stall(2 * 1000 * 1000);
 +	status = efi_bs->LoadImage(FALSE, parent_image, NULL, (void *)tboot_file.addr, tboot_file.size, &image);
 +        if (EFI_ERROR(status)) {
-+                PrintErrMesg(L"AXA Error from LoadImage", status);
++                PrintErr(L"AXA Error from LoadImage \r\n");
 +	}
 +
-+        PrintStr(L"AXA test start image...\r\n");
++        PrintStr(L"AXA test start start image...\r\n");
++	efi_bs->Stall(2 * 1000 * 1000);
 +	status = efi_bs->StartImage(image, NULL, NULL);
 +        /* tboot is not yet SecureBoot compatible (it's still in ELF format) */
 +        if ( shim_lock &&
 +            (status = shim_lock->Measure(tboot_file.ptr, tboot_file.size, 4))
 +            != EFI_SUCCESS )
 +                PrintErrMesg(L"tboot could not be measured", status);
++	efi_bs->Stall(2 * 1000 * 1000);
++        PrintStr(L"AXA loaded?...\r\n");
 +
 +        // Remove tboot from the mb_modules list; save its cmdline
 +        mbi.mods_count--;
@@ -592,7 +597,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
  }
  
  static void __init efi_arch_handle_cmdline(CHAR16 *image_name,
-@@ -564,6 +990,10 @@ static void __init efi_arch_memory_setup
+@@ -564,6 +995,10 @@ static void __init efi_arch_memory_setup
      unsigned int i;
      EFI_STATUS status;
  
@@ -603,7 +608,7 @@ Signed-off-by: Tamas K Lengyel <lengyelt@ainfosec.com>
      /* Allocate space for trampoline (in first Mb). */
      cfg.addr = 0x100000;
  
-@@ -714,6 +1144,146 @@ void __init efi_multiboot2(EFI_HANDLE Im
+@@ -714,6 +1149,146 @@ void __init efi_multiboot2(EFI_HANDLE Im
      efi_exit_boot(ImageHandle, SystemTable);
  }
  
